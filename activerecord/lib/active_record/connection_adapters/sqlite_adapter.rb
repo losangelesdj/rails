@@ -14,7 +14,7 @@ module ActiveRecord
           # Allow database path relative to Rails.root, but only if
           # the database path is not the special path that tells
           # Sqlite to build a database only in memory.
-          if Object.const_defined?(:Rails) && ':memory:' != config[:database]
+          if defined?(Rails.root) && ':memory:' != config[:database]
             config[:database] = File.expand_path(config[:database], Rails.root)
           end
         end
@@ -183,12 +183,6 @@ module ActiveRecord
         catch_schema_changes { @connection.rollback }
       end
 
-      # SELECT ... FOR UPDATE is redundant since the table is locked.
-      def add_lock!(sql, options) #:nodoc:
-        sql
-      end
-
-
       # SCHEMA STATEMENTS ========================================
 
       def tables(name = nil) #:nodoc:
@@ -199,20 +193,20 @@ module ActiveRecord
         SQL
 
         execute(sql, name).map do |row|
-          row[0]
+          row['name']
         end
       end
 
       def columns(table_name, name = nil) #:nodoc:
         table_structure(table_name).map do |field|
-          SQLiteColumn.new(field['name'], field['dflt_value'], field['type'], field['notnull'] == "0")
+          SQLiteColumn.new(field['name'], field['dflt_value'], field['type'], field['notnull'].to_i == 0)
         end
       end
 
       def indexes(table_name, name = nil) #:nodoc:
         execute("PRAGMA index_list(#{quote_table_name(table_name)})", name).map do |row|
           index = IndexDefinition.new(table_name, row['name'])
-          index.unique = row['unique'] != '0'
+          index.unique = row['unique'].to_i != 0
           index.columns = execute("PRAGMA index_info('#{index.name}')").map { |col| col['name'] }
           index
         end

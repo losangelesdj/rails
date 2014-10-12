@@ -247,9 +247,9 @@ If you see the message in the console or logs:
 Make sure you have started your web server with the option +--debugger+:
 
 <shell>
-~/PathTo/rails_project$ script/server --debugger
-=> Booting Mongrel (use 'script/server webrick' to force WEBrick)
-=> Rails 2.2.0 application starting on http://0.0.0.0:3000
+~/PathTo/rails_project$ rails server --debugger
+=> Booting Mongrel (use 'rails server webrick' to force WEBrick)
+=> Rails 3.0.0 application starting on http://0.0.0.0:3000
 => Debugger enabled
 ...
 </shell>
@@ -330,7 +330,7 @@ h4. The Context
 
 When you start debugging your application, you will be placed in different contexts as you go through the different parts of the stack.
 
-ruby-debug creates a content when a stopping point or an event is reached. The context has information about the suspended program which enables a debugger to inspect the frame stack, evaluate variables from the perspective of the debugged program, and contains information about the place where the debugged program is stopped.
+ruby-debug creates a context when a stopping point or an event is reached. The context has information about the suspended program which enables a debugger to inspect the frame stack, evaluate variables from the perspective of the debugged program, and contains information about the place where the debugged program is stopped.
 
 At any time you can call the +backtrace+ command (or its alias +where+) to print the backtrace of the application. This can be very helpful to know how you got where you are. If you ever wondered about how you got somewhere in your code, then +backtrace+ will supply the answer.
 
@@ -472,10 +472,10 @@ class Author < ActiveRecord::Base
 end
 </ruby>
 
-TIP: You can use ruby-debug while using script/console. Just remember to +require "ruby-debug"+ before calling the +debugger+ method.
+TIP: You can use ruby-debug while using +rails console+. Just remember to +require "ruby-debug"+ before calling the +debugger+ method.
 
 <shell>
-/PathTo/project $ script/console
+/PathTo/project $ rails console
 Loading development environment (Rails 2.1.0)
 >> require "ruby-debug"
 => []
@@ -636,7 +636,7 @@ require 'bleak_house' if ENV['BLEAK_HOUSE']
 Start a server instance with BleakHouse integration:
 
 <shell>
-RAILS_ENV=production BLEAK_HOUSE=1 ruby-bleak-house ./script/server
+RAILS_ENV=production BLEAK_HOUSE=1 ruby-bleak-house rails server
 </shell>
 
 Make sure to run a couple hundred requests to get better data samples, then press +CTRL-C+. The server will stop and Bleak House will produce a dumpfile in +/tmp+:

@@ -1,12 +1,13 @@
-require 'abstract_unit'
 require 'generators/generators_test_helper'
-require 'rails/generators/rails/controller/controller_generator'
+require 'generators/rails/controller/controller_generator'
 
-class ControllerGeneratorTest < GeneratorsTestCase
+class ControllerGeneratorTest < Rails::Generators::TestCase
+  include GeneratorsTestHelper
+  arguments %w(Account foo bar)
 
   def test_help_does_not_show_invoked_generators_options_if_they_already_exist
     content = run_generator ["--help"]
-    assert_no_match /Helper options:/, content
+    assert_no_match /Helper options\:/, content
   end
 
   def test_controller_skeleton_is_created
@@ -66,15 +67,8 @@ class ControllerGeneratorTest < GeneratorsTestCase
     run_generator
 
     assert_file "app/controllers/account_controller.rb" do |controller|
-      assert_instance_method controller, :foo
-      assert_instance_method controller, :bar
+      assert_instance_method :foo, controller
+      assert_instance_method :bar, controller
     end
   end
-
-  protected
-
-    def run_generator(args=["Account", "foo", "bar"])
-      silence(:stdout) { Rails::Generators::ControllerGenerator.start args, :destination_root => destination_root }
-    end
-
 end

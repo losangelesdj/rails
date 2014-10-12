@@ -3,7 +3,6 @@ $VERBOSE = nil
 # Load Rails rakefile extensions
 %w(
   annotations
-  databases
   documentation
   framework
   log
@@ -11,7 +10,6 @@ $VERBOSE = nil
   misc
   routes
   statistics
-  testing
   tmp
 ).each do |task|
   load "rails/tasks/#{task}.rake"

@@ -20,7 +20,22 @@ module ActiveRecord
         super
         construct_sql
       end
-      
+
+      delegate :group, :order, :limit, :joins, :where, :preload, :eager_load, :includes, :from, :lock, :readonly, :having, :to => :scoped
+
+      def select(select = nil, &block)
+        if block_given?
+          load_target
+          @target.select(&block)
+        else
+          scoped.select(select)
+        end
+      end
+
+      def scoped
+        with_scope(construct_scope) { @reflection.klass.scoped }
+      end
+
       def find(*args)
         options = args.extract_options!
 
@@ -37,27 +52,24 @@ module ActiveRecord
             load_target.select { |r| ids.include?(r.id) }
           end
         else
-          conditions = "#{@finder_sql}"
-          if sanitized_conditions = sanitize_sql(options[:conditions])
-            conditions << " AND (#{sanitized_conditions})"
-          end
-          
-          options[:conditions] = conditions
-
-          if options[:order] && @reflection.options[:order]
-            options[:order] = "#{options[:order]}, #{@reflection.options[:order]}"
-          elsif @reflection.options[:order]
-            options[:order] = @reflection.options[:order]
-          end
-          
-          # Build options specific to association
-          construct_find_options!(options)
-          
           merge_options_from_reflection!(options)
-          
-          # Pass through args exactly as we received them.
-          args << options
-          @reflection.klass.find(*args)
+          construct_find_options!(options)
+
+          find_scope = construct_scope[:find].slice(:conditions, :order)
+
+          with_scope(:find => find_scope) do
+            relation = @reflection.klass.send(:construct_finder_arel, options, @reflection.klass.send(:current_scoped_methods))
+
+            case args.first
+            when :first, :last
+              relation.send(args.first)
+            when :all
+              records = relation.all
+              @reflection.options[:uniq] ? uniq(records) : records
+            else
+              relation.find(*args)
+            end
+          end
         end
       end
 
@@ -106,7 +118,7 @@ module ActiveRecord
         end
       end
 
-      # Add +records+ to this association.  Returns +self+ so method calls may be chained.  
+      # Add +records+ to this association.  Returns +self+ so method calls may be chained.
       # Since << flattens its argument list and inserts each record, +push+ and +concat+ behave identically.
       def <<(*records)
         result = true
@@ -150,7 +162,7 @@ module ActiveRecord
         delete(@target)
         reset_target!
       end
-      
+
       # Calculate sum using SQL, not Enumerable
       def sum(*args)
         if block_given?
@@ -164,14 +176,15 @@ module ActiveRecord
       # be used for the query. If no +:counter_sql+ was supplied, but +:finder_sql+ was set, the
       # descendant's +construct_sql+ method will have set :counter_sql automatically.
       # Otherwise, construct options and pass them with scope to the target class's +count+.
-      def count(*args)
+      def count(column_name = nil, options = {})
         if @reflection.options[:counter_sql]
           @reflection.klass.count_by_sql(@counter_sql)
         else
-          column_name, options = @reflection.klass.send(:construct_count_options_from_args, *args)
+          column_name, options = nil, column_name if column_name.is_a?(Hash)
+
           if @reflection.options[:uniq]
             # This is needed because 'SELECT count(DISTINCT *)..' is not valid SQL.
-            column_name = "#{@reflection.quoted_table_name}.#{@reflection.klass.primary_key}" if column_name == :all
+            column_name = "#{@reflection.quoted_table_name}.#{@reflection.klass.primary_key}" unless column_name
             options.merge!(:distinct => true)
           end
 
@@ -222,7 +235,7 @@ module ActiveRecord
 
         if @reflection.options[:dependent] && @reflection.options[:dependent] == :destroy
           destroy_all
-        else          
+        else
           delete_all
         end
 
@@ -383,7 +396,7 @@ module ActiveRecord
           loaded if target
           target
         end
-        
+
         def method_missing(method, *args)
           if @target.respond_to?(method) || (!@reflection.klass.respond_to?(method) && Class.respond_to?(method))
             if block_given?
@@ -391,9 +404,7 @@ module ActiveRecord
             else
               super
             end
-          elsif @reflection.klass.scopes.include?(method)
-            @reflection.klass.scopes[method].call(self, *args)
-          else          
+          else
             with_scope(construct_scope) do
               if block_given?
                 @reflection.klass.send(method, *args) { |*block_args| yield(*block_args) }
@@ -476,15 +487,22 @@ module ActiveRecord
 
         def callback(method, record)
           callbacks_for(method).each do |callback|
-            ActiveSupport::DeprecatedCallbacks::Callback.new(method, callback, record).call(@owner, record)
+            case callback
+            when Symbol
+              @owner.send(callback, record)
+            when Proc
+              callback.call(@owner, record)
+            else
+              callback.send(method, @owner, record)
+            end
           end
         end
 
         def callbacks_for(callback_name)
           full_callback_name = "#{callback_name}_for_#{@reflection.name}"
           @owner.class.read_inheritable_attribute(full_callback_name.to_sym) || []
-        end   
-        
+        end
+
         def ensure_owner_is_not_new
           if @owner.new_record?
             raise ActiveRecord::RecordNotSaved, "You cannot call create unless the parent is saved"

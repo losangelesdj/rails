@@ -37,27 +37,34 @@ module ActionDispatch # :nodoc:
     attr_writer :header, :sending_file
     alias_method :headers=, :header=
 
-    def initialize
-      @status = 200
-      @header = {}
-      @cache_control = {}
+    module Setup
+      def initialize(status = 200, header = {}, body = [])
+        @writer = lambda { |x| @body << x }
+        @block = nil
+        @length = 0
 
-      @writer = lambda { |x| @body << x }
-      @block = nil
-      @length = 0
+        @status, @header, @body = status, header, body
 
-      @body, @cookie = [], []
-      @sending_file = false
+        @cookie = []
+        @sending_file = false
 
-      yield self if block_given?
+        @blank = false
+
+        if content_type = self["Content-Type"]
+          type, charset = content_type.split(/;\s*charset=/)
+          @content_type = Mime::Type.lookup(type)
+          @charset = charset || "UTF-8"
+        end
+
+        yield self if block_given?
+      end
     end
 
-    def cache_control
-      @cache_control ||= {}
-    end
+    include Setup
+    include ActionDispatch::Http::Cache::Response
 
     def status=(status)
-      @status = status.to_i
+      @status = Rack::Utils.status_code(status)
     end
 
     # The response code of the request
@@ -71,9 +78,21 @@ module ActionDispatch # :nodoc:
     end
 
     def message
-      StatusCodes::STATUS_CODES[@status]
+      Rack::Utils::HTTP_STATUS_CODES[@status]
     end
     alias_method :status_message, :message
+
+    def respond_to?(method)
+      if method.to_sym == :to_path
+        @body.respond_to?(:to_path)
+      else
+        super
+      end
+    end
+
+    def to_path
+      @body.to_path
+    end
 
     def body
       str = ''
@@ -111,54 +130,15 @@ module ActionDispatch # :nodoc:
     # information.
     attr_accessor :charset, :content_type
 
-    def last_modified
-      if last = headers['Last-Modified']
-        Time.httpdate(last)
-      end
-    end
-
-    def last_modified?
-      headers.include?('Last-Modified')
-    end
-
-    def last_modified=(utc_time)
-      headers['Last-Modified'] = utc_time.httpdate
-    end
-
-    def etag
-      @etag
-    end
-
-    def etag?
-      @etag
-    end
-
-    def etag=(etag)
-      key = ActiveSupport::Cache.expand_cache_key(etag)
-      @etag = %("#{Digest::MD5.hexdigest(key)}")
-    end
-
     CONTENT_TYPE    = "Content-Type"
 
     cattr_accessor(:default_charset) { "utf-8" }
 
-    def assign_default_content_type_and_charset!
-      return if headers[CONTENT_TYPE].present?
-
-      @content_type ||= Mime::HTML
-      @charset      ||= self.class.default_charset
-
-      type = @content_type.to_s.dup
-      type << "; charset=#{@charset}" unless @sending_file
-
-      headers[CONTENT_TYPE] = type
-    end
-
     def to_a
       assign_default_content_type_and_charset!
       handle_conditional_get!
-      self["Set-Cookie"] = @cookie.join("\n")
-      self["ETag"]       = @etag if @etag
+      self["Set-Cookie"] = @cookie.join("\n") unless @cookie.blank?
+      self["ETag"]       = @_etag if @_etag
       super
     end
 
@@ -231,53 +211,17 @@ module ActionDispatch # :nodoc:
     end
 
     private
-      def handle_conditional_get!
-        if etag? || last_modified? || !@cache_control.empty?
-          set_conditional_cache_control!
-        elsif nonempty_ok_response?
-          self.etag = @body
+      def assign_default_content_type_and_charset!
+        return if headers[CONTENT_TYPE].present?
 
-          if request && request.etag_matches?(etag)
-            self.status = 304
-            self.body = []
-          end
+        @content_type ||= Mime::HTML
+        @charset      ||= self.class.default_charset
 
-          set_conditional_cache_control!
-        else
-          headers["Cache-Control"] = "no-cache"
-        end
+        type = @content_type.to_s.dup
+        type << "; charset=#{@charset}" unless @sending_file
+
+        headers[CONTENT_TYPE] = type
       end
 
-      def nonempty_ok_response?
-        @status == 200 && string_body?
-      end
-
-      def string_body?
-        !@blank && @body.respond_to?(:all?) && @body.all? { |part| part.is_a?(String) }
-      end
-
-      DEFAULT_CACHE_CONTROL = "max-age=0, private, must-revalidate"
-
-      def set_conditional_cache_control!
-        control = @cache_control
-
-        if control.empty?
-          headers["Cache-Control"] = DEFAULT_CACHE_CONTROL
-        elsif @cache_control[:no_cache]
-          headers["Cache-Control"] = "no-cache"
-        else
-          extras  = control[:extras]
-          max_age = control[:max_age]
-
-          options = []
-          options << "max-age=#{max_age.to_i}" if max_age
-          options << (control[:public] ? "public" : "private")
-          options << "must-revalidate" if control[:must_revalidate]
-          options.concat(extras) if extras
-
-          headers["Cache-Control"] = options.join(", ")
-        end
-
-      end
   end
 end

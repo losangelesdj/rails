@@ -26,8 +26,8 @@ module ActiveRecord
       # Attempts to <tt>save!</tt> the record and clears changed attributes if successful.
       def save_with_dirty!(*args) #:nodoc:
         save_without_dirty!(*args).tap do
-          @previously_changed = changes 
-          changed_attributes.clear 
+          @previously_changed = changes
+          changed_attributes.clear
         end
       end
 

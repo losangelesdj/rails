@@ -9,7 +9,7 @@ module ActiveSupport #:nodoc:
     autoload :UnicodeDatabase, 'active_support/multibyte/unicode_database'
     autoload :Codepoint, 'active_support/multibyte/unicode_database'
     autoload :UCD, 'active_support/multibyte/unicode_database'
-    
+
     # A list of all available normalization forms. See http://www.unicode.org/reports/tr15/tr15-29.html for more
     # information about normalization.
     NORMALIZATION_FORMS = [:c, :kc, :d, :kd]

@@ -1,7 +1,8 @@
 require 'active_support/core_ext/object/metaclass'
 
 module ActiveRecord
-  class IrreversibleMigration < ActiveRecordError#:nodoc:
+  # Exception that can be raised to stop migrations from going backwards.
+  class IrreversibleMigration < ActiveRecordError
   end
 
   class DuplicateMigrationVersionError < ActiveRecordError#:nodoc:
@@ -106,7 +107,7 @@ module ActiveRecord
   # The Rails package has several tools to help create and apply migrations.
   #
   # To generate a new migration, you can use
-  #   script/generate migration MyNewMigration
+  #   rails generate migration MyNewMigration
   #
   # where MyNewMigration is the name of your migration. The generator will
   # create an empty migration file <tt>timestamp_my_new_migration.rb</tt> in the <tt>db/migrate/</tt>
@@ -116,7 +117,7 @@ module ActiveRecord
   # MyNewMigration.
   #
   # There is a special syntactic shortcut to generate migrations that add fields to a table.
-  #   script/generate migration add_fieldname_to_tablename fieldname:string
+  #   rails generate migration add_fieldname_to_tablename fieldname:string
   #
   # This will generate the file <tt>timestamp_add_fieldname_to_tablename</tt>, which will look like this:
   #   class AddFieldnameToTablename < ActiveRecord::Migration
@@ -339,6 +340,10 @@ module ActiveRecord
         self.verbose = save
       end
 
+      def connection
+        ActiveRecord::Base.connection
+      end
+
       def method_missing(method, *arguments, &block)
         arg_list = arguments.map(&:inspect) * ', '
 
@@ -346,7 +351,7 @@ module ActiveRecord
           unless arguments.empty? || method == :execute
             arguments[0] = Migrator.proper_table_name(arguments.first)
           end
-          Base.connection.send(method, *arguments, &block)
+          connection.send(method, *arguments, &block)
         end
       end
     end
@@ -401,6 +406,10 @@ module ActiveRecord
 
       def run(direction, migrations_path, target_version)
         self.new(direction, migrations_path, target_version).run
+      end
+
+      def migrations_path
+        'db/migrate'
       end
 
       def schema_migrations_table_name
@@ -479,7 +488,7 @@ module ActiveRecord
       runnable.pop if down? && !target.nil?
 
       runnable.each do |migration|
-        Base.logger.info "Migrating to #{migration.name} (#{migration.version})"
+        Base.logger.info "Migrating to #{migration.name} (#{migration.version})" if Base.logger
 
         # On our way up, we skip migrating the ones we've already migrated
         next if up? && migrated.include?(migration.version.to_i)

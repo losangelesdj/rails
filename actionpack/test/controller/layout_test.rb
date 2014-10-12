@@ -116,7 +116,7 @@ end
 
 class LayoutSetInResponseTest < ActionController::TestCase
   include ActionView::Template::Handlers
-  
+
   def test_layout_set_when_using_default_layout
     @controller = DefaultLayoutController.new
     get :hello
@@ -128,7 +128,7 @@ class LayoutSetInResponseTest < ActionController::TestCase
     get :hello
     assert @controller.template.layout.include?('layouts/item')
   end
-  
+
   def test_layout_only_exception_when_included
     @controller = OnlyLayoutController.new
     get :hello

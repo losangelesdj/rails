@@ -20,7 +20,7 @@ class ViewLoadPathsTest < ActionController::TestCase
     layout 'test/sub'
     def hello_world; render(:template => 'test/hello_world'); end
   end
-  
+
   def setup
     # TestController.view_paths = nil
 
@@ -61,7 +61,7 @@ class ViewLoadPathsTest < ActionController::TestCase
 
     @controller.append_view_path(%w(bar baz))
     assert_paths(FIXTURE_LOAD_PATH, "foo", "bar", "baz")
-    
+
     @controller.append_view_path(FIXTURE_LOAD_PATH)
     assert_paths(FIXTURE_LOAD_PATH, "foo", "bar", "baz", FIXTURE_LOAD_PATH)
   end
@@ -142,9 +142,9 @@ class ViewLoadPathsTest < ActionController::TestCase
     assert_paths A, "a/path"
     assert_paths A, *B.view_paths
     assert_paths C, *original_load_paths
-    
+
     C.view_paths = []
-    assert_nothing_raised { C.view_paths << 'c/path' }
+    assert_nothing_raised { C.append_view_path 'c/path' }
     assert_paths C, "c/path"
   end
 end

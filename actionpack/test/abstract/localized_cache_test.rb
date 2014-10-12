@@ -2,9 +2,9 @@ require 'abstract_unit'
 
 module AbstractController
   module Testing
-  
+
     class CachedController < AbstractController::Base
-      include AbstractController::RenderingController
+      include AbstractController::Rendering
       include AbstractController::LocalizedCache
 
       self.view_paths = [ActionView::FixtureResolver.new(

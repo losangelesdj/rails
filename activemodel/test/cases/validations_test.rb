@@ -9,11 +9,16 @@ require 'models/custom_reader'
 
 class ValidationsTest < ActiveModel::TestCase
   include ActiveModel::TestsDatabase
-  include ActiveModel::ValidationsRepairHelper
+
+  def setup
+    Topic._validators.clear
+  end
 
   # Most of the tests mess with the validations of Topic, so lets repair it all the time.
   # Other classes we mess with will be dealt with in the specific tests
-  repair_validations(Topic)
+  def teardown
+    Topic.reset_callbacks(:validate)
+  end
 
   def test_single_field_validation
     r = Reply.new
@@ -70,6 +75,12 @@ class ValidationsTest < ActiveModel::TestCase
     assert_equal 2, r.errors.count
   end
 
+  def test_errors_on_nested_attributes_expands_name
+    t = Topic.new
+    t.errors["replies.name"] << "can't be blank"
+    assert_equal ["Replies name can't be blank"], t.errors.full_messages
+  end
+
   def test_errors_on_base
     r = Reply.new
     r.content = "Mismatch"
@@ -98,7 +109,7 @@ class ValidationsTest < ActiveModel::TestCase
     assert_equal %w(gotcha gotcha), t.errors[:title]
     assert_equal %w(gotcha gotcha), t.errors[:content]
   end
-  
+
   def test_validates_each_custom_reader
     hits = 0
     CustomReader.validates_each(:title, :content, [:title, :content]) do |record, attr|
@@ -204,5 +215,36 @@ class ValidationsTest < ActiveModel::TestCase
 
     all_errors = t.errors.to_a
     assert_deprecated { assert_equal all_errors, t.errors.each_full{|err| err} }
+  end
+
+  def test_validation_with_message_as_proc
+    Topic.validates_presence_of(:title, :message => proc { "no blanks here".upcase })
+
+    t = Topic.new
+    assert !t.valid?
+    assert ["NO BLANKS HERE"], t.errors[:title]
+  end
+
+  def test_list_of_validators_for_model
+    Topic.validates_presence_of :title
+    Topic.validates_length_of :title, :minimum => 2
+
+    assert_equal 2, Topic.validators.count
+    assert_equal [:presence, :length], Topic.validators.map(&:kind)
+  end
+
+  def test_list_of_validators_on_an_attribute
+    Topic.validates_presence_of :title, :content
+    Topic.validates_length_of :title, :minimum => 2
+
+    assert_equal 2, Topic.validators_on(:title).count
+    assert_equal [:presence, :length], Topic.validators_on(:title).map(&:kind)
+    assert_equal 1, Topic.validators_on(:content).count
+    assert_equal [:presence], Topic.validators_on(:content).map(&:kind)
+  end
+
+  def test_accessing_instance_of_validator_on_an_attribute
+    Topic.validates_length_of :title, :minimum => 10
+    assert_equal 10, Topic.validators_on(:title).first.options[:minimum]
   end
 end

@@ -17,7 +17,7 @@ module ActionView #:nodoc:
 
       @@template_handlers = {}
       @@default_template_handlers = nil
-    
+
       def self.extensions
         @@template_handlers.keys
       end

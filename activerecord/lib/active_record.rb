@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2004-2009 David Heinemeier Hansson
+# Copyright (c) 2004-2010 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,11 +21,12 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-activesupport_path = "#{File.dirname(__FILE__)}/../../activesupport/lib"
-$:.unshift(activesupport_path) if File.directory?(activesupport_path)
 
-activemodel_path = "#{File.dirname(__FILE__)}/../../activemodel/lib"
-$:.unshift(activemodel_path) if File.directory?(activemodel_path)
+activesupport_path = File.expand_path('../../../activesupport/lib', __FILE__)
+$:.unshift(activesupport_path) if File.directory?(activesupport_path) && !$:.include?(activesupport_path)
+
+activemodel_path = File.expand_path('../../../activemodel/lib', __FILE__)
+$:.unshift(activemodel_path) if File.directory?(activemodel_path) && !$:.include?(activemodel_path)
 
 require 'active_support'
 require 'active_model'
@@ -34,83 +35,82 @@ require 'arel'
 module ActiveRecord
   extend ActiveSupport::Autoload
 
-  autoload :VERSION
+  eager_autoload do
+    autoload :VERSION
 
-  autoload :ActiveRecordError, 'active_record/base'
-  autoload :ConnectionNotEstablished, 'active_record/base'
+    autoload :ActiveRecordError, 'active_record/base'
+    autoload :ConnectionNotEstablished, 'active_record/base'
 
-  autoload :Aggregations
-  autoload :AssociationPreload
-  autoload :Associations
-  autoload :AttributeMethods
-  autoload :Attributes
-  autoload :AutosaveAssociation
-  autoload :Relation
-  autoload :Base
-  autoload :Batches
-  autoload :Calculations
-  autoload :Callbacks
-  autoload :DynamicFinderMatch
-  autoload :DynamicScopeMatch
-  autoload :Migration
-  autoload :Migrator, 'active_record/migration'
-  autoload :NamedScope
-  autoload :NestedAttributes
-  autoload :Observer
-  autoload :QueryCache
-  autoload :Reflection
-  autoload :Schema
-  autoload :SchemaDumper
-  autoload :Serialization
-  autoload :SessionStore
-  autoload :StateMachine
-  autoload :Timestamp
-  autoload :Transactions
-  autoload :Types
-  autoload :Validations
+    autoload :Aggregations
+    autoload :AssociationPreload
+    autoload :Associations
+    autoload :AttributeMethods
+    autoload :AutosaveAssociation
+
+    autoload :Relation
+
+    autoload_under 'relation' do
+      autoload :QueryMethods
+      autoload :FinderMethods
+      autoload :Calculations
+      autoload :PredicateBuilder
+      autoload :SpawnMethods
+      autoload :Batches
+    end
+
+    autoload :Base
+    autoload :Callbacks
+    autoload :DynamicFinderMatch
+    autoload :DynamicScopeMatch
+    autoload :Migration
+    autoload :Migrator, 'active_record/migration'
+    autoload :NamedScope
+    autoload :NestedAttributes
+    autoload :Observer
+    autoload :QueryCache
+    autoload :Reflection
+    autoload :Schema
+    autoload :SchemaDumper
+    autoload :Serialization
+    autoload :SessionStore
+    autoload :Timestamp
+    autoload :Transactions
+    autoload :Validations
+  end
 
   module AttributeMethods
     extend ActiveSupport::Autoload
 
-    autoload :BeforeTypeCast
-    autoload :Dirty
-    autoload :PrimaryKey
-    autoload :Query
-    autoload :Read
-    autoload :TimeZoneConversion
-    autoload :Write
-  end
-
-  module Attributes
-    extend ActiveSupport::Autoload
-
-    autoload :Aliasing
-    autoload :Store
-    autoload :Typecasting
-  end
-
-  module Type
-    extend ActiveSupport::Autoload
-    
-    autoload :Number, 'active_record/types/number'
-    autoload :Object, 'active_record/types/object'
-    autoload :Serialize, 'active_record/types/serialize'
-    autoload :TimeWithZone, 'active_record/types/time_with_zone'
-    autoload :Unknown, 'active_record/types/unknown'
+    eager_autoload do
+      autoload :BeforeTypeCast
+      autoload :Dirty
+      autoload :PrimaryKey
+      autoload :Query
+      autoload :Read
+      autoload :TimeZoneConversion
+      autoload :Write
+    end
   end
 
   module Locking
     extend ActiveSupport::Autoload
-    
-    autoload :Optimistic
-    autoload :Pessimistic
+
+    eager_autoload do
+      autoload :Optimistic
+      autoload :Pessimistic
+    end
   end
 
   module ConnectionAdapters
     extend ActiveSupport::Autoload
-    
-    autoload :AbstractAdapter
+
+    eager_autoload do
+      autoload :AbstractAdapter
+    end
   end
+
+  autoload :TestCase
+  autoload :TestFixtures, 'active_record/fixtures'
 end
 
 Arel::Table.engine = Arel::Sql::Engine.new(ActiveRecord::Base)

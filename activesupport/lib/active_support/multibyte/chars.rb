@@ -19,7 +19,7 @@ module ActiveSupport #:nodoc:
     #   bad.explicit_checking_method "T".mb_chars.downcase.to_s
     #
     # The default Chars implementation assumes that the encoding of the string is UTF-8, if you want to handle different
-    # encodings you can write your own multibyte string handler and configure it through 
+    # encodings you can write your own multibyte string handler and configure it through
     # ActiveSupport::Multibyte.proxy_class.
     #
     #   class CharsForUTF32
@@ -385,7 +385,7 @@ module ActiveSupport #:nodoc:
       # Convert characters in the string to uppercase.
       #
       # Example:
-      #   'Laurent, òu sont les tests?'.mb_chars.upcase.to_s #=> "LAURENT, ÒU SONT LES TESTS?"
+      #   'Laurent, où sont les tests ?'.mb_chars.upcase.to_s #=> "LAURENT, OÙ SONT LES TESTS ?"
       def upcase
         apply_mapping :uppercase_mapping
       end
@@ -528,7 +528,7 @@ module ActiveSupport #:nodoc:
               unpacked << codepoints[marker..pos-1]
               marker = pos
             end
-          end 
+          end
           unpacked
         end
 
@@ -662,15 +662,15 @@ module ActiveSupport #:nodoc:
       end
 
       protected
-        
+
         def translate_offset(byte_offset) #:nodoc:
           return nil if byte_offset.nil?
           return 0   if @wrapped_string == ''
-          
+
           if @wrapped_string.respond_to?(:force_encoding)
             @wrapped_string = @wrapped_string.dup.force_encoding(Encoding::ASCII_8BIT)
           end
-          
+
           begin
             @wrapped_string[0...byte_offset].unpack('U*').length
           rescue ArgumentError => e

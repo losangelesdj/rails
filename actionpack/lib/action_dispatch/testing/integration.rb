@@ -1,10 +1,7 @@
 require 'stringio'
 require 'uri'
-require 'active_support/test_case'
 require 'active_support/core_ext/object/metaclass'
-
-# TODO: Remove circular dependency on ActionController
-require 'action_controller/testing/process'
+require 'rack/test'
 
 module ActionDispatch
   module Integration #:nodoc:
@@ -128,9 +125,7 @@ module ActionDispatch
       DEFAULT_HOST = "www.example.com"
 
       include Test::Unit::Assertions
-      include ActionDispatch::Assertions
-      include ActionController::TestProcess
-      include RequestHelpers
+      include TestProcess, RequestHelpers, Assertions
 
       %w( status status_message headers body redirect? ).each do |method|
         delegate method, :to => :response, :allow_nil => true
@@ -193,11 +188,11 @@ module ActionDispatch
         unless defined? @named_routes_configured
           # install the named routes in this session instance.
           klass = metaclass
-          ActionController::Routing::Routes.install_helpers(klass)
+          ActionDispatch::Routing::Routes.install_helpers(klass)
 
           # the helpers are made protected by default--we make them public for
           # easier access during testing and troubleshooting.
-          klass.module_eval { public *ActionController::Routing::Routes.named_routes.helpers }
+          klass.module_eval { public *ActionDispatch::Routing::Routes.named_routes.helpers }
           @named_routes_configured = true
         end
       end
@@ -245,9 +240,9 @@ module ActionDispatch
             path = location.query ? "#{location.path}?#{location.query}" : location.path
           end
 
-          [ControllerCapture, ActionController::Testing].each do |mod|
-            unless ActionController::Base < mod
-              ActionController::Base.class_eval { include mod }
+          unless ActionController::Base < ActionController::Testing
+            ActionController::Base.class_eval do
+              include ActionController::Testing
             end
           end
 
@@ -264,7 +259,9 @@ module ActionDispatch
             "HTTP_HOST"      => host,
             "REMOTE_ADDR"    => remote_addr,
             "CONTENT_TYPE"   => "application/x-www-form-urlencoded",
-            "HTTP_ACCEPT"    => accept
+            "HTTP_ACCEPT"    => accept,
+
+            "action_dispatch.show_exceptions" => false
           }
 
           (rack_environment || {}).each do |key, value|
@@ -272,15 +269,15 @@ module ActionDispatch
           end
 
           session = Rack::Test::Session.new(@mock_session)
-
-          @controller = ActionController::Base.capture_instantiation do
-            session.request(path, env)
-          end
+          session.request(path, env)
 
           @request_count += 1
           @request  = ActionDispatch::Request.new(session.last_request.env)
-          @response = ActionDispatch::TestResponse.from_response(@mock_session.last_response)
+          response = @mock_session.last_response
+          @response = ActionDispatch::TestResponse.new(response.status, response.headers, response.body)
           @html_document = nil
+
+          @controller = session.last_request.env['action_controller.instance']
 
           return response.status
         end
@@ -297,31 +294,6 @@ module ActionDispatch
           }
           ActionController::UrlRewriter.new(ActionDispatch::Request.new(env), {})
         end
-    end
-
-    # A module used to extend ActionController::Base, so that integration tests
-    # can capture the controller used to satisfy a request.
-    module ControllerCapture #:nodoc:
-      extend ActiveSupport::Concern
-
-      included do
-        alias_method_chain :initialize, :capture
-      end
-
-      def initialize_with_capture(*args)
-        initialize_without_capture
-        self.class.last_instantiation ||= self
-      end
-
-      module ClassMethods #:nodoc:
-        mattr_accessor :last_instantiation
-
-        def capture_instantiation
-          self.last_instantiation = nil
-          yield
-          return last_instantiation
-        end
-      end
     end
 
     module Runner
@@ -415,7 +387,7 @@ module ActionDispatch
   # At its simplest, you simply extend IntegrationTest and write your tests
   # using the get/post methods:
   #
-  #   require "#{File.dirname(__FILE__)}/test_helper"
+  #   require "test_helper"
   #
   #   class ExampleTest < ActionController::IntegrationTest
   #     fixtures :people
@@ -439,7 +411,7 @@ module ActionDispatch
   # powerful testing DSL that is specific for your application. You can even
   # reference any named routes you happen to have defined!
   #
-  #   require "#{File.dirname(__FILE__)}/test_helper"
+  #   require "test_helper"
   #
   #   class AdvancedTest < ActionController::IntegrationTest
   #     fixtures :people, :rooms

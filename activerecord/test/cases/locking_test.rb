@@ -150,7 +150,7 @@ class OptimisticLockingTest < ActiveRecord::TestCase
       end
     end
   end
-  
+
   def test_quote_table_name
     ref = references(:michael_magician)
     ref.favourite = !ref.favourite
@@ -225,7 +225,7 @@ unless current_adapter?(:SybaseAdapter, :OpenBaseAdapter)
     def test_sane_find_with_scoped_lock
       assert_nothing_raised do
         Person.transaction do
-          Person.with_scope(:find => { :lock => true }) do
+          Person.send(:with_scope, :find => { :lock => true }) do
             Person.find 1
           end
         end

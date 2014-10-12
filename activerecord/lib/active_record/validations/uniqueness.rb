@@ -1,5 +1,82 @@
 module ActiveRecord
   module Validations
+    class UniquenessValidator < ActiveModel::EachValidator
+      def initialize(options)
+        super(options.reverse_merge(:case_sensitive => true))
+      end
+
+      # Unfortunately, we have to tie Uniqueness validators to a class.
+      def setup(klass)
+        @klass = klass
+      end
+
+      def validate_each(record, attribute, value)
+        finder_class = find_finder_class_for(record)
+        table = finder_class.unscoped
+
+        table_name   = record.class.quoted_table_name
+        sql, params  = mount_sql_and_params(finder_class, table_name, attribute, value)
+
+        relation = table.where(sql, *params)
+
+        Array(options[:scope]).each do |scope_item|
+          scope_value = record.send(scope_item)
+          relation = relation.where(scope_item => scope_value)
+        end
+
+        unless record.new_record?
+          # TODO : This should be in Arel
+          relation = relation.where("#{record.class.quoted_table_name}.#{record.class.primary_key} <> ?", record.send(:id))
+        end
+
+        if relation.exists?
+          record.errors.add(attribute, :taken, :default => options[:message], :value => value)
+        end
+      end
+
+    protected
+
+      # The check for an existing value should be run from a class that
+      # isn't abstract. This means working down from the current class
+      # (self), to the first non-abstract class. Since classes don't know
+      # their subclasses, we have to build the hierarchy between self and
+      # the record's class.
+      def find_finder_class_for(record) #:nodoc:
+        class_hierarchy = [record.class]
+
+        while class_hierarchy.first != @klass
+          class_hierarchy.insert(0, class_hierarchy.first.superclass)
+        end
+
+        class_hierarchy.detect { |klass| !klass.abstract_class? }
+      end
+
+      def mount_sql_and_params(klass, table_name, attribute, value) #:nodoc:
+        column = klass.columns_hash[attribute.to_s]
+
+        operator = if value.nil?
+          "IS ?"
+        elsif column.text?
+          value = column.limit ? value.to_s.mb_chars[0, column.limit] : value.to_s
+          "#{klass.connection.case_sensitive_equality_operator} ?"
+        else
+          "= ?"
+        end
+
+        sql_attribute = "#{table_name}.#{klass.connection.quote_column_name(attribute)}"
+
+        if value.nil? || (options[:case_sensitive] || !column.text?)
+          sql = "#{sql_attribute} #{operator}"
+          params = [value]
+        else
+          sql = "LOWER(#{sql_attribute}) #{operator}"
+          params = [value.mb_chars.downcase]
+        end
+
+        [sql, params]
+      end
+    end
+
     module ClassMethods
       # Validates whether the value of the specified attributes are unique across the system. Useful for making sure that only one user
       # can be named "davidhh".
@@ -69,6 +146,7 @@ module ActiveRecord
       #
       # This could even happen if you use transactions with the 'serializable'
       # isolation level. There are several ways to get around this problem:
+      #
       # - By locking the database table before validating, and unlocking it after
       #   saving. However, table locking is very expensive, and thus not
       #   recommended.
@@ -80,7 +158,7 @@ module ActiveRecord
       #   ActiveRecord::ConnectionAdapters::SchemaStatements#add_index. In the
       #   rare case that a race condition occurs, the database will guarantee
       #   the field's uniqueness.
-      #   
+      #
       #   When the database catches such a duplicate insertion,
       #   ActiveRecord::Base#save will raise an ActiveRecord::StatementInvalid
       #   exception. You can either choose to let this error propagate (which
@@ -89,70 +167,14 @@ module ActiveRecord
       #   that the title already exists, and asking him to re-enter the title).
       #   This technique is also known as optimistic concurrency control:
       #   http://en.wikipedia.org/wiki/Optimistic_concurrency_control
-      #   
+      #
       #   Active Record currently provides no way to distinguish unique
       #   index constraint errors from other types of database errors, so you
       #   will have to parse the (database-specific) exception message to detect
       #   such a case.
+      #
       def validates_uniqueness_of(*attr_names)
-        configuration = { :case_sensitive => true }
-        configuration.update(attr_names.extract_options!)
-
-        validates_each(attr_names,configuration) do |record, attr_name, value|
-          # The check for an existing value should be run from a class that
-          # isn't abstract. This means working down from the current class
-          # (self), to the first non-abstract class. Since classes don't know
-          # their subclasses, we have to build the hierarchy between self and
-          # the record's class.
-          class_hierarchy = [record.class]
-          while class_hierarchy.first != self
-            class_hierarchy.insert(0, class_hierarchy.first.superclass)
-          end
-
-          # Now we can work our way down the tree to the first non-abstract
-          # class (which has a database table to query from).
-          finder_class = class_hierarchy.detect { |klass| !klass.abstract_class? }
-
-          column = finder_class.columns_hash[attr_name.to_s]
-
-          if value.nil?
-            comparison_operator = "IS ?"
-          elsif column.text?
-            comparison_operator = "#{connection.case_sensitive_equality_operator} ?"
-            value = column.limit ? value.to_s.mb_chars[0, column.limit] : value.to_s
-          else
-            comparison_operator = "= ?"
-          end
-
-          sql_attribute = "#{record.class.quoted_table_name}.#{connection.quote_column_name(attr_name)}"
-
-          if value.nil? || (configuration[:case_sensitive] || !column.text?)
-            condition_sql = "#{sql_attribute} #{comparison_operator}"
-            condition_params = [value]
-          else
-            condition_sql = "LOWER(#{sql_attribute}) #{comparison_operator}"
-            condition_params = [value.mb_chars.downcase]
-          end
-
-          if scope = configuration[:scope]
-            Array(scope).map do |scope_item|
-              scope_value = record.send(scope_item)
-              condition_sql << " AND " << attribute_condition("#{record.class.quoted_table_name}.#{scope_item}", scope_value)
-              condition_params << scope_value
-            end
-          end
-
-          unless record.new_record?
-            condition_sql << " AND #{record.class.quoted_table_name}.#{record.class.primary_key} <> ?"
-            condition_params << record.send(:id)
-          end
-
-          finder_class.with_exclusive_scope do
-            if finder_class.exists?([condition_sql, *condition_params])
-              record.errors.add(attr_name, :taken, :default => configuration[:message], :value => value)
-            end
-          end
-        end
+        validates_with UniquenessValidator, _merge_attributes(attr_names)
       end
     end
   end

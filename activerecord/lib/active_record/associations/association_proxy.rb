@@ -161,7 +161,7 @@ module ActiveRecord
         end
 
         # Forwards the call to the reflection class.
-        def sanitize_sql(sql, table_name = @reflection.klass.quoted_table_name)
+        def sanitize_sql(sql, table_name = @reflection.klass.table_name)
           @reflection.klass.send(:sanitize_sql, sql, table_name)
         end
 
@@ -200,14 +200,18 @@ module ActiveRecord
 
       private
         # Forwards any missing method call to the \target.
-        def method_missing(method, *args, &block)
+        def method_missing(method, *args)
           if load_target
             unless @target.respond_to?(method)
               message = "undefined method `#{method.to_s}' for \"#{@target}\":#{@target.class.to_s}"
               raise NoMethodError, message
             end
 
-            @target.send(method, *args, &block)
+            if block_given?
+              @target.send(method, *args)  { |*block_args| yield(*block_args) }
+            else
+              @target.send(method, *args)
+            end
           end
         end
 

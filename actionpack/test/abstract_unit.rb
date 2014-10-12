@@ -1,13 +1,4 @@
-root = File.expand_path('../../..', __FILE__)
-begin
-  require "#{root}/vendor/gems/environment"
-rescue LoadError
-  $:.unshift "#{root}/activesupport/lib"
-  $:.unshift "#{root}/activemodel/lib"
-end
-
-lib = File.expand_path("#{File.dirname(__FILE__)}/../lib")
-$:.unshift(lib) unless $:.include?('lib') || $:.include?(lib)
+require File.expand_path('../../../load_paths', __FILE__)
 
 $:.unshift(File.dirname(__FILE__) + '/lib')
 $:.unshift(File.dirname(__FILE__) + '/fixtures/helpers')
@@ -16,17 +7,14 @@ $:.unshift(File.dirname(__FILE__) + '/fixtures/alternate_helpers')
 ENV['TMPDIR'] = File.join(File.dirname(__FILE__), 'tmp')
 
 require 'test/unit'
-require 'active_support'
-require 'active_support/test_case'
 require 'abstract_controller'
 require 'action_controller'
 require 'action_view'
 require 'action_view/base'
 require 'action_dispatch'
-require 'active_model'
 require 'fixture_template'
-require 'action_view/test_case'
 require 'active_support/dependencies'
+require 'active_model'
 
 begin
   require 'ruby-debug'
@@ -82,7 +70,7 @@ class ActiveSupport::TestCase
   # Hold off drawing routes until all the possible controller classes
   # have been loaded.
   setup_once do
-    ActionController::Routing::Routes.draw do |map|
+    ActionDispatch::Routing::Routes.draw do |map|
       match ':controller(/:action(/:id))'
     end
   end
@@ -90,13 +78,15 @@ end
 
 class ActionController::IntegrationTest < ActiveSupport::TestCase
   def self.build_app(routes = nil)
+    ActionDispatch::Flash
     ActionDispatch::MiddlewareStack.new { |middleware|
-      middleware.use "ActionDispatch::StringCoercion"
       middleware.use "ActionDispatch::ShowExceptions"
       middleware.use "ActionDispatch::Callbacks"
       middleware.use "ActionDispatch::ParamsParser"
-      middleware.use "Rack::Head"
-    }.build(routes || ActionController::Routing::Routes)
+      middleware.use "ActionDispatch::Cookies"
+      middleware.use "ActionDispatch::Flash"
+      middleware.use "ActionDispatch::Head"
+    }.build(routes || ActionDispatch::Routing::Routes)
   end
 
   self.app = build_app
@@ -122,19 +112,19 @@ class ActionController::IntegrationTest < ActiveSupport::TestCase
   end
 
   def with_routing(&block)
-    real_routes = ActionController::Routing::Routes
-    ActionController::Routing.module_eval { remove_const :Routes }
+    real_routes = ActionDispatch::Routing::Routes
+    ActionDispatch::Routing.module_eval { remove_const :Routes }
 
-    temporary_routes = ActionController::Routing::RouteSet.new
+    temporary_routes = ActionDispatch::Routing::RouteSet.new
     self.class.app = self.class.build_app(temporary_routes)
-    ActionController::Routing.module_eval { const_set :Routes, temporary_routes }
+    ActionDispatch::Routing.module_eval { const_set :Routes, temporary_routes }
 
     yield temporary_routes
   ensure
-    if ActionController::Routing.const_defined? :Routes
-      ActionController::Routing.module_eval { remove_const :Routes }
+    if ActionDispatch::Routing.const_defined? :Routes
+      ActionDispatch::Routing.module_eval { remove_const :Routes }
     end
-    ActionController::Routing.const_set(:Routes, real_routes) if real_routes
+    ActionDispatch::Routing.const_set(:Routes, real_routes) if real_routes
     self.class.app = self.class.build_app
   end
 end
@@ -198,7 +188,7 @@ module ActionController
   Base.view_paths = FIXTURE_LOAD_PATH
 
   class TestCase
-    include TestProcess
+    include ActionDispatch::TestProcess
 
     def assert_template(options = {}, message = nil)
       validate_request!

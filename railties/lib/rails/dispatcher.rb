@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2004-2009 David Heinemeier Hansson
+# Copyright (c) 2004-2010 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -20,5 +20,5 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
-require 'action_controller/dispatch/dispatcher'
+require 'action_controller/deprecated/dispatcher'
 Dispatcher = ActionController::Dispatcher

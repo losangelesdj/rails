@@ -1,4 +1,10 @@
 module ActionDispatch
+  # Provide callbacks to be executed before and after the request dispatch.
+  #
+  # It also provides a to_prepare callback, which is performed in all requests
+  # in development by only once in production and notification callback for async
+  # operations.
+  #
   class Callbacks
     include ActiveSupport::Callbacks
 
@@ -27,12 +33,6 @@ module ActionDispatch
 
     def self.after(*args, &block)
       set_callback(:call, :after, *args, &block)
-    end
-
-    class << self
-      # DEPRECATED
-      alias_method :before_dispatch, :before
-      alias_method :after_dispatch, :after
     end
 
     def initialize(app, prepare_each_request = false)

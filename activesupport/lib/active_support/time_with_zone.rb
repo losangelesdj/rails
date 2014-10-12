@@ -1,4 +1,5 @@
 require "active_support/values/time_zone"
+require 'active_support/core_ext/object/acts_like'
 
 module ActiveSupport
   # A Time-like class that can represent a time in any time zone. Necessary because standard Ruby Time instances are
@@ -31,11 +32,10 @@ module ActiveSupport
   #   t.is_a?(Time)                         # => true
   #   t.is_a?(ActiveSupport::TimeWithZone)  # => true
   class TimeWithZone
-    
     def self.name
       'Time' # Report class name as 'Time' to thwart type checking
     end
-    
+
     include Comparable
     attr_reader :time_zone
 
@@ -113,9 +113,9 @@ module ActiveSupport
     end
     alias_method :iso8601, :xmlschema
 
-    # Coerces the date to a string for JSON encoding.
-    #
-    # ISO 8601 format is used if ActiveSupport::JSON::Encoding.use_standard_json_time_format is set.
+    # Coerces the date to a string for JSON encoding. The default format is ISO 8601. You can get
+    # %Y/%m/%d %H:%M:%S +offset style by setting ActiveSupport::JSON::Encoding.use_standard_json_time_format
+    # to false.
     #
     # ==== Examples
     #

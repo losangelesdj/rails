@@ -1,19 +1,10 @@
-ORIG_ARGV = ARGV.dup
-
-begin
-  require File.expand_path('../../../vendor/gems/environment', __FILE__)
-rescue LoadError
-end
-
-lib = File.expand_path("#{File.dirname(__FILE__)}/../lib")
-$:.unshift(lib) unless $:.include?('lib') || $:.include?(lib)
+require File.expand_path('../../../load_paths', __FILE__)
 
 require 'test/unit'
 require 'mocha'
 
 ENV['NO_RELOAD'] = '1'
 require 'active_support'
-require 'active_support/test_case'
 
 # Include shims until we get off 1.8.6
 require 'active_support/ruby/shim'

@@ -1,10 +1,9 @@
 require 'rails/generators'
-Rails::Generators.configure!
 
-if ARGV.size == 0
-  Rails::Generators.help
+if [nil, "-h", "--help"].include?(ARGV.first)
+  Rails::Generators.help 'generate'
   exit
 end
 
 name = ARGV.shift
-Rails::Generators.invoke name, ARGV, :behavior => :invoke
+Rails::Generators.invoke name, ARGV, :behavior => :invoke, :destination_root => Rails.root

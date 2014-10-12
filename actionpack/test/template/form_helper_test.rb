@@ -6,6 +6,39 @@ class FormHelperTest < ActionView::TestCase
 
   def setup
     super
+
+    # Create "label" locale for testing I18n label helpers
+    I18n.backend.store_translations 'label', {
+      :activemodel => {
+        :attributes => {
+          :post => {
+            :cost => "Total cost"
+          }
+        }
+      },
+      :helpers => {
+        :label => {
+          :post => {
+            :body => "Write entire text here"
+          }
+        }
+      }
+    }
+
+    # Create "submit" locale for testing I18n submit helpers
+    I18n.backend.store_translations 'submit', {
+      :helpers => {
+        :submit => {
+          :create => 'Create {{model}}',
+          :update => 'Confirm {{model}} changes',
+          :submit => 'Save changes',
+          :another_post => {
+            :update => 'Update your {{model}}'
+          }
+        }
+      }
+    }
+
     @post = Post.new
     @comment = Comment.new
     def @post.errors()
@@ -20,6 +53,7 @@ class FormHelperTest < ActionView::TestCase
     def @post.id_before_type_cast; 123; end
     def @post.to_param; '123'; end
 
+    @post.persisted   = true
     @post.title       = "Hello World"
     @post.author_name = ""
     @post.body        = "Back to the hill and over it again!"
@@ -49,6 +83,27 @@ class FormHelperTest < ActionView::TestCase
   def test_label_with_symbols
     assert_dom_equal('<label for="post_title">Title</label>', label(:post, :title))
     assert_dom_equal('<label for="post_secret">Secret?</label>', label(:post, :secret?))
+  end
+
+  def test_label_with_locales_strings
+    old_locale, I18n.locale = I18n.locale, :label
+    assert_dom_equal('<label for="post_body">Write entire text here</label>', label("post", "body"))
+  ensure
+    I18n.locale = old_locale
+  end
+
+  def test_label_with_human_attribute_name
+    old_locale, I18n.locale = I18n.locale, :label
+    assert_dom_equal('<label for="post_cost">Total cost</label>', label(:post, :cost))
+  ensure
+    I18n.locale = old_locale
+  end
+
+  def test_label_with_locales_symbols
+    old_locale, I18n.locale = I18n.locale, :label
+    assert_dom_equal('<label for="post_body">Write entire text here</label>', label(:post, :body))
+  ensure
+    I18n.locale = old_locale
   end
 
   def test_label_with_for_attribute_as_symbol
@@ -150,6 +205,11 @@ class FormHelperTest < ActionView::TestCase
       hidden_field("post", "title", :value => "Something Else")
   end
 
+  def test_text_field_with_custom_type
+    assert_dom_equal '<input id="user_email" size="30" name="user[email]" type="email" />',
+      text_field("user", "email", :type => "email")
+  end
+
   def test_check_box
     assert_dom_equal(
       '<input name="post[secret]" type="hidden" value="0" /><input checked="checked" id="post_secret" name="post[secret]" type="checkbox" value="1" />',
@@ -193,6 +253,19 @@ class FormHelperTest < ActionView::TestCase
       check_box("post", "secret", {}, "on", "off")
     )
   end
+
+  def test_check_box_with_multiple_behavior
+    @post.comment_ids = [2,3]
+    assert_dom_equal(
+      '<input name="post[comment_ids][]" type="hidden" value="0" /><input id="post_comment_ids_1" name="post[comment_ids][]" type="checkbox" value="1" />',
+      check_box("post", "comment_ids", { :multiple => true }, 1)
+    )
+    assert_dom_equal(
+      '<input name="post[comment_ids][]" type="hidden" value="0" /><input checked="checked" id="post_comment_ids_3" name="post[comment_ids][]" type="checkbox" value="3" />',
+      check_box("post", "comment_ids", { :multiple => true }, 3)
+    )
+  end
+
 
   def test_checkbox_disabled_still_submits_checked_value
     assert_dom_equal(
@@ -379,6 +452,25 @@ class FormHelperTest < ActionView::TestCase
     assert_dom_equal expected, output_buffer
   end
 
+  def test_form_for_with_remote
+    form_for(:post, @post, :remote => true, :html => { :id => 'create-post', :method => :put }) do |f|
+      concat f.text_field(:title)
+      concat f.text_area(:body)
+      concat f.check_box(:secret)
+    end
+
+    expected =
+      "<form action='http://www.example.com' id='create-post' method='post' data-remote='true'>" +
+      "<div style='margin:0;padding:0;display:inline'><input name='_method' type='hidden' value='put' /></div>" +
+      "<input name='post[title]' size='30' type='text' id='post_title' value='Hello World' />" +
+      "<textarea name='post[body]' id='post_body' rows='20' cols='40'>Back to the hill and over it again!</textarea>" +
+      "<input name='post[secret]' type='hidden' value='0' />" +
+      "<input name='post[secret]' checked='checked' type='checkbox' id='post_secret' value='1' />" +
+      "</form>"
+
+    assert_dom_equal expected, output_buffer
+  end
+
   def test_form_for_without_object
     form_for(:post, :html => { :id => 'create-post' }) do |f|
       concat f.text_field(:title)
@@ -433,6 +525,67 @@ class FormHelperTest < ActionView::TestCase
       "</form>"
 
     assert_dom_equal expected, output_buffer
+  end
+
+  def test_submit_with_object_as_new_record_and_locale_strings
+    old_locale, I18n.locale = I18n.locale, :submit
+
+    @post.persisted = false
+    form_for(:post, @post) do |f|
+      concat f.submit
+    end
+
+    expected = "<form action='http://www.example.com' method='post'>" +
+               "<input name='commit' id='post_submit' type='submit' value='Create Post' />" +
+               "</form>"
+    assert_dom_equal expected, output_buffer
+  ensure
+    I18n.locale = old_locale
+  end
+
+  def test_submit_with_object_as_existing_record_and_locale_strings
+    old_locale, I18n.locale = I18n.locale, :submit
+
+    form_for(:post, @post) do |f|
+      concat f.submit
+    end
+
+    expected = "<form action='http://www.example.com' method='post'>" +
+               "<input name='commit' id='post_submit' type='submit' value='Confirm Post changes' />" +
+               "</form>"
+    assert_dom_equal expected, output_buffer
+  ensure
+    I18n.locale = old_locale
+  end
+
+  def test_submit_without_object_and_locale_strings
+    old_locale, I18n.locale = I18n.locale, :submit
+
+    form_for(:post) do |f|
+      concat f.submit :class => "extra"
+    end
+
+    expected = "<form action='http://www.example.com' method='post'>" +
+               "<input name='commit' class='extra' id='post_submit' type='submit' value='Save changes' />" +
+               "</form>"
+    assert_dom_equal expected, output_buffer
+  ensure
+    I18n.locale = old_locale
+  end
+
+  def test_submit_with_object_and_nested_lookup
+    old_locale, I18n.locale = I18n.locale, :submit
+
+    form_for(:another_post, @post) do |f|
+      concat f.submit
+    end
+
+    expected = "<form action='http://www.example.com' method='post'>" +
+               "<input name='commit' id='another_post_submit' type='submit' value='Update your Post' />" +
+               "</form>"
+    assert_dom_equal expected, output_buffer
+  ensure
+    I18n.locale = old_locale
   end
 
   def test_nested_fields_for
@@ -619,7 +772,7 @@ class FormHelperTest < ActionView::TestCase
 
     assert_dom_equal expected, output_buffer
   end
-  
+
   def test_nested_fields_for_with_existing_records_on_a_nested_attributes_one_to_one_association_with_explicit_hidden_field_placement
     @post.author = Author.new(321)
 
@@ -630,7 +783,7 @@ class FormHelperTest < ActionView::TestCase
         concat af.text_field(:name)
       end
     end
-    
+
     expected = '<form action="http://www.example.com" method="post">' +
                '<input name="post[title]" size="30" type="text" id="post_title" value="Hello World" />' +
                '<input id="post_author_attributes_id" name="post[author_attributes][id]" type="hidden" value="321" />' +
@@ -675,7 +828,7 @@ class FormHelperTest < ActionView::TestCase
         end
       end
     end
-    
+
     expected = '<form action="http://www.example.com" method="post">' +
                '<input name="post[title]" size="30" type="text" id="post_title" value="Hello World" />' +
                '<input id="post_comments_attributes_0_id" name="post[comments_attributes][0][id]" type="hidden" value="1" />' +
@@ -751,6 +904,28 @@ class FormHelperTest < ActionView::TestCase
     form_for(:post, @post) do |f|
       concat f.text_field(:title)
       f.fields_for(:comments, @post.comments) do |cf|
+        concat cf.text_field(:name)
+      end
+    end
+
+    expected = '<form action="http://www.example.com" method="post">' +
+               '<input name="post[title]" size="30" type="text" id="post_title" value="Hello World" />' +
+               '<input id="post_comments_attributes_0_name" name="post[comments_attributes][0][name]" size="30" type="text" value="comment #1" />' +
+               '<input id="post_comments_attributes_0_id" name="post[comments_attributes][0][id]" type="hidden" value="1" />' +
+               '<input id="post_comments_attributes_1_name" name="post[comments_attributes][1][name]" size="30" type="text" value="comment #2" />' +
+               '<input id="post_comments_attributes_1_id" name="post[comments_attributes][1][id]" type="hidden" value="2" />' +
+               '</form>'
+
+    assert_dom_equal expected, output_buffer
+  end
+
+  def test_nested_fields_for_with_existing_records_on_a_supplied_nested_attributes_collection_different_from_record_one
+    comments = Array.new(2) { |id| Comment.new(id + 1) }
+    @post.comments = []
+
+    form_for(:post, @post) do |f|
+      concat f.text_field(:title)
+      f.fields_for(:comments, comments) do |cf|
         concat cf.text_field(:name)
       end
     end
@@ -1018,7 +1193,7 @@ class FormHelperTest < ActionView::TestCase
     (field_helpers - %w(hidden_field)).each do |selector|
       src = <<-END_SRC
         def #{selector}(field, *args, &proc)
-          ("<label for='\#{field}'>\#{field.to_s.humanize}:</label> " + super + "<br/>").html_safe!
+          ("<label for='\#{field}'>\#{field.to_s.humanize}:</label> " + super + "<br/>").html_safe
         end
       END_SRC
       class_eval src, __FILE__, __LINE__
@@ -1043,8 +1218,8 @@ class FormHelperTest < ActionView::TestCase
   end
 
   def test_default_form_builder
-    old_default_form_builder, ActionView.default_form_builder =
-      ActionView.default_form_builder, LabelledFormBuilder
+    old_default_form_builder, ActionView::Base.default_form_builder =
+      ActionView::Base.default_form_builder, LabelledFormBuilder
 
     form_for(:post, @post) do |f|
       concat f.text_field(:title)
@@ -1061,7 +1236,7 @@ class FormHelperTest < ActionView::TestCase
 
     assert_dom_equal expected, output_buffer
   ensure
-    ActionView.default_form_builder = old_default_form_builder
+    ActionView::Base.default_form_builder = old_default_form_builder
   end
 
   def test_default_form_builder_with_active_record_helpers
@@ -1095,26 +1270,6 @@ class FormHelperTest < ActionView::TestCase
 
     assert_dom_equal expected, output_buffer
 
-  end
-
-  # Perhaps this test should be moved to prototype helper tests.
-  def test_remote_form_for_with_labelled_builder
-    self.extend ActionView::Helpers::PrototypeHelper
-
-     remote_form_for(:post, @post, :builder => LabelledFormBuilder) do |f|
-       concat f.text_field(:title)
-       concat f.text_area(:body)
-       concat f.check_box(:secret)
-     end
-
-     expected =
-       %(<form action="http://www.example.com" onsubmit="new Ajax.Request('http://www.example.com', {asynchronous:true, evalScripts:true, parameters:Form.serialize(this)}); return false;" method="post">) +
-       "<label for='title'>Title:</label> <input name='post[title]' size='30' type='text' id='post_title' value='Hello World' /><br/>" +
-       "<label for='body'>Body:</label> <textarea name='post[body]' id='post_body' rows='20' cols='40'>Back to the hill and over it again!</textarea><br/>" +
-       "<label for='secret'>Secret:</label> <input name='post[secret]' type='hidden' value='0' /><input name='post[secret]' checked='checked' type='checkbox' id='post_secret' value='1' /><br/>" +
-       "</form>"
-
-     assert_dom_equal expected, output_buffer
   end
 
   def test_fields_for_with_labelled_builder
@@ -1209,7 +1364,7 @@ class FormHelperTest < ActionView::TestCase
 
   def test_form_for_with_new_object
     post = Post.new
-    post.new_record = true
+    post.persisted = false
     def post.id() nil end
 
     form_for(post) do |f| end
@@ -1219,9 +1374,7 @@ class FormHelperTest < ActionView::TestCase
   end
 
   def test_form_for_with_existing_object_in_list
-    @post.new_record = false
     @comment.save
-
     form_for([@post, @comment]) {}
 
     expected = %(<form action="#{comment_path(@post, @comment)}" class="edit_comment" id="edit_comment_1" method="post"><div style="margin:0;padding:0;display:inline"><input name="_method" type="hidden" value="put" /></div></form>)
@@ -1229,8 +1382,6 @@ class FormHelperTest < ActionView::TestCase
   end
 
   def test_form_for_with_new_object_in_list
-    @post.new_record = false
-
     form_for([@post, @comment]) {}
 
     expected = %(<form action="#{comments_path(@post)}" class="new_comment" id="new_comment" method="post"></form>)
@@ -1238,9 +1389,7 @@ class FormHelperTest < ActionView::TestCase
   end
 
   def test_form_for_with_existing_object_and_namespace_in_list
-    @post.new_record = false
     @comment.save
-
     form_for([:admin, @post, @comment]) {}
 
     expected = %(<form action="#{admin_comment_path(@post, @comment)}" class="edit_comment" id="edit_comment_1" method="post"><div style="margin:0;padding:0;display:inline"><input name="_method" type="hidden" value="put" /></div></form>)
@@ -1248,8 +1397,6 @@ class FormHelperTest < ActionView::TestCase
   end
 
   def test_form_for_with_new_object_and_namespace_in_list
-    @post.new_record = false
-
     form_for([:admin, @post, @comment]) {}
 
     expected = %(<form action="#{admin_comments_path(@post)}" class="new_comment" id="new_comment" method="post"></form>)
@@ -1261,15 +1408,6 @@ class FormHelperTest < ActionView::TestCase
 
     expected = "<form action=\"/super_posts\" class=\"edit_post\" id=\"edit_post_123\" method=\"post\"><div style=\"margin:0;padding:0;display:inline\"><input name=\"_method\" type=\"hidden\" value=\"put\" /></div></form>"
     assert_equal expected, output_buffer
-  end
-
-  def test_remote_form_for_with_html_options_adds_options_to_form_tag
-    self.extend ActionView::Helpers::PrototypeHelper
-
-    remote_form_for(:post, @post, :html => {:id => 'some_form', :class => 'some_class'}) do |f| end
-    expected = "<form action=\"http://www.example.com\" class=\"some_class\" id=\"some_form\" method=\"post\" onsubmit=\"new Ajax.Request('http://www.example.com', {asynchronous:true, evalScripts:true, parameters:Form.serialize(this)}); return false;\"></form>"
-
-    assert_dom_equal expected, output_buffer
   end
 
   protected

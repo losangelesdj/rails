@@ -3,7 +3,6 @@ require 'yaml'
 require 'csv'
 require 'zlib'
 require 'active_support/dependencies'
-require 'active_support/test_case'
 require 'active_support/core_ext/logger'
 
 if RUBY_VERSION < '1.9'
@@ -336,7 +335,6 @@ end
 #   george:
 #     id: 1
 #     name: George the Monkey
-#     pirate_id: 1
 #
 #   ### in fruits.yml
 #
@@ -371,8 +369,8 @@ end
 #   ### in monkeys.yml
 #
 #   george:
+#     id: 1
 #     name: George the Monkey
-#     pirate: reginald
 #     fruits: apple, orange, grape
 #
 #   ### in fruits.yml
@@ -435,7 +433,7 @@ end
 # Any fixture labeled "DEFAULTS" is safely ignored.
 
 class Fixtures < (RUBY_VERSION < '1.9' ? YAML::Omap : Hash)
-  MAX_ID = 2 ** 31 - 1
+  MAX_ID = 2 ** 30 - 1
   DEFAULT_FILTER_RE = /\.ya?ml$/
 
   @@all_cached_fixtures = {}
@@ -823,8 +821,8 @@ module ActiveRecord
       superclass_delegating_accessor :pre_loaded_fixtures
 
       self.fixture_table_names = []
-      self.use_transactional_fixtures = false
-      self.use_instantiated_fixtures = true
+      self.use_transactional_fixtures = true
+      self.use_instantiated_fixtures = false
       self.pre_loaded_fixtures = false
 
       self.fixture_class_names = {}

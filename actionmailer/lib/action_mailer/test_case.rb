@@ -1,5 +1,3 @@
-require 'active_support/test_case'
-
 module ActionMailer
   class NonInferrableMailerError < ::StandardError
     def initialize(name)
@@ -39,12 +37,12 @@ module ActionMailer
       def initialize_test_deliveries
         ActionMailer::Base.delivery_method = :test
         ActionMailer::Base.perform_deliveries = true
-        ActionMailer::Base.deliveries = []
+        ActionMailer::Base.deliveries.clear
       end
 
       def set_expected_mail
-        @expected = TMail::Mail.new
-        @expected.set_content_type "text", "plain", { "charset" => charset }
+        @expected = Mail.new
+        @expected.content_type ["text", "plain", { "charset" => charset }]
         @expected.mime_version = '1.0'
       end
 
@@ -58,7 +56,7 @@ module ActionMailer
       end
 
       def read_fixture(action)
-        IO.readlines(File.join(RAILS_ROOT, 'test', 'fixtures', self.class.mailer_class.name.underscore, action))
+        IO.readlines(File.join(Rails.root, 'test', 'fixtures', self.class.mailer_class.name.underscore, action))
       end
   end
 end

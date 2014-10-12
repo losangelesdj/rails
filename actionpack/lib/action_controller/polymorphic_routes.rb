@@ -11,7 +11,7 @@ module ActionController
   #   polymorphic_url([:admin, @article, @comment])
   #
   # results in:
-  #   
+  #
   #   admin_article_comment_url(@article, @comment)
   #
   # == Usage within the framework
@@ -92,8 +92,7 @@ module ActionController
       inflection = if options[:action].to_s == "new"
         args.pop
         :singular
-      elsif (record.respond_to?(:new_record?) && record.new_record?) ||
-            (record.respond_to?(:destroyed?) && record.destroyed?)
+      elsif (record.respond_to?(:persisted?) && !record.persisted?)
         args.pop
         :plural
       elsif record.is_a?(Class)

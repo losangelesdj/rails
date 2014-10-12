@@ -1,4 +1,3 @@
-require 'active_support/test_case'
 require 'action_controller/test_case'
 
 module ActionView
@@ -39,8 +38,7 @@ module ActionView
       end
     end
 
-    include ActionDispatch::Assertions
-    include ActionController::TestProcess
+    include ActionDispatch::Assertions, ActionDispatch::TestProcess
     include ActionView::Context
 
     include ActionController::PolymorphicRoutes
@@ -55,7 +53,7 @@ module ActionView
     setup :setup_with_controller
     def setup_with_controller
       @controller = TestController.new
-      @output_buffer = ActionView::SafeBuffer.new
+      @output_buffer = ActiveSupport::SafeBuffer.new
       @rendered = ''
 
       self.class.send(:include_helper_modules!)
@@ -154,7 +152,7 @@ module ActionView
       end
 
       def method_missing(selector, *args)
-        if ActionController::Routing::Routes.named_routes.helpers.include?(selector)
+        if ActionDispatch::Routing::Routes.named_routes.helpers.include?(selector)
           @controller.__send__(selector, *args)
         else
           super

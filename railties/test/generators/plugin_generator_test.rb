@@ -1,17 +1,33 @@
-require 'abstract_unit'
 require 'generators/generators_test_helper'
-require 'rails/generators/rails/plugin/plugin_generator'
+require 'generators/rails/plugin/plugin_generator'
 
-class PluginGeneratorTest < GeneratorsTestCase
+class PluginGeneratorTest < Rails::Generators::TestCase
+  include GeneratorsTestHelper
+  arguments %w(plugin_fu)
 
   def test_plugin_skeleton_is_created
     run_generator
+    year = Date.today.year
 
     %w(
       vendor/plugins
       vendor/plugins/plugin_fu
+      vendor/plugins/plugin_fu/init.rb
+      vendor/plugins/plugin_fu/install.rb
+      vendor/plugins/plugin_fu/uninstall.rb
       vendor/plugins/plugin_fu/lib
+      vendor/plugins/plugin_fu/lib/plugin_fu.rb
+      vendor/plugins/plugin_fu/Rakefile
     ).each{ |path| assert_file path }
+
+    %w(
+      vendor/plugins/plugin_fu/README
+    ).each{ |path| assert_file path, /PluginFu/ }
+
+    %w(
+      vendor/plugins/plugin_fu/README
+      vendor/plugins/plugin_fu/MIT-LICENSE
+    ).each{ |path| assert_file path, /#{year}/ }
   end
 
   def test_check_class_collision
@@ -32,7 +48,7 @@ class PluginGeneratorTest < GeneratorsTestCase
 
   def test_creates_tasks_if_required
     run_generator ["plugin_fu", "--tasks"]
-    assert_file "vendor/plugins/plugin_fu/tasks/plugin_fu_tasks.rake"
+    assert_file "vendor/plugins/plugin_fu/lib/tasks/plugin_fu_tasks.rake"
   end
 
   def test_creates_generator_if_required
@@ -46,11 +62,4 @@ class PluginGeneratorTest < GeneratorsTestCase
     run_generator
     run_generator ["plugin_fu"], :behavior => :revoke
   end
-
-  protected
-
-    def run_generator(args=["plugin_fu"], config={})
-      silence(:stdout) { Rails::Generators::PluginGenerator.start args, config.merge(:destination_root => destination_root) }
-    end
-
 end

@@ -152,7 +152,7 @@ class OrderedHashTest < Test::Unit::TestCase
     assert_equal [@keys.first, @values.first], pair
     assert !@ordered_hash.keys.include?(pair.first)
   end
-  
+
   def test_keys
     original = @ordered_hash.keys.dup
     @ordered_hash.keys.pop
@@ -197,5 +197,29 @@ class OrderedHashTest < Test::Unit::TestCase
     original = @ordered_hash.replace(@other_ordered_hash)
     assert_same original, @ordered_hash
     assert_equal @other_ordered_hash.keys, @ordered_hash.keys
+  end
+
+  def test_each_after_yaml_serialization
+    values = []
+    @deserialized_ordered_hash = YAML::load(YAML::dump(@ordered_hash))
+
+    @deserialized_ordered_hash.each {|key, value| values << value}
+    assert_equal @values, values
+  end
+
+  def test_order_after_yaml_serialization
+    @deserialized_ordered_hash = YAML::load(YAML::dump(@ordered_hash))
+
+    assert_equal @keys,   @deserialized_ordered_hash.keys
+    assert_equal @values, @deserialized_ordered_hash.values
+  end
+
+  def test_order_after_yaml_serialization_with_nested_arrays
+    @ordered_hash[:array] = %w(a b c)
+
+    @deserialized_ordered_hash = YAML::load(YAML::dump(@ordered_hash))
+
+    assert_equal @ordered_hash.keys,   @deserialized_ordered_hash.keys
+    assert_equal @ordered_hash.values, @deserialized_ordered_hash.values
   end
 end

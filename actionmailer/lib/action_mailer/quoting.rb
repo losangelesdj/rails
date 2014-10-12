@@ -1,5 +1,8 @@
 module ActionMailer
   module Quoting #:nodoc:
+    # TODO extract this into Mail itself.
+    #
+    #
     # Convert the given text into quoted printable format, with an instruction
     # that the text be eventually interpreted in the given charset.
     def quoted_printable(text, charset)
@@ -43,7 +46,7 @@ module ActionMailer
     # "to", "from", "cc", "bcc" and "reply-to" headers.
     def quote_address_if_necessary(address, charset)
       if Array === address
-        address.map { |a| quote_address_if_necessary(a, charset) }
+        address.map { |a| quote_address_if_necessary(a, charset) }.join(", ")
       elsif address =~ /^(\S.*)\s+(<.*>)$/
         address = $2
         phrase = quote_if_necessary($1.gsub(/^['"](.*)['"]$/, '\1'), charset)

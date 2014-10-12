@@ -1,10 +1,26 @@
-require "active_support/core_ext/exception"
+require 'active_support/core_ext/exception'
+require 'active_support/notifications'
+require 'action_dispatch/http/request'
 
 module ActionDispatch
+  # This middleware rescues any exception returned by the application and renders
+  # nice exception pages if it's being rescued locally.
+  #
+  # Every time an exception is caught, a notification is published, becoming a good API
+  # to deal with exceptions. So, if you want send an e-mail through ActionMailer
+  # everytime this notification is published, you just need to do the following:
+  #
+  #   ActiveSupport::Notifications.subscribe "action_dispatch.show_exception" do |name, start, end, instrumentation_id, payload|
+  #     ExceptionNotifier.deliver_exception(start, payload)
+  #   end
+  #
+  # The payload is a hash which has two pairs:
+  #
+  # * :env - Contains the rack env for the given request;
+  # * :exception - The exception raised;
+  #
   class ShowExceptions
-    include StatusCodes
-
-    LOCALHOST = '127.0.0.1'.freeze
+    LOCALHOST = ['127.0.0.1', '::1'].freeze
 
     RESCUES_TEMPLATE_PATH = File.join(File.dirname(__FILE__), 'templates')
 
@@ -12,8 +28,7 @@ module ActionDispatch
     @@rescue_responses = Hash.new(:internal_server_error)
     @@rescue_responses.update({
       'ActionController::RoutingError'             => :not_found,
-      # TODO: Clean this up after the switch
-      ActionController::UnknownAction.name         => :not_found,
+      'AbstractController::ActionNotFound'         => :not_found,
       'ActiveRecord::RecordNotFound'               => :not_found,
       'ActiveRecord::StaleObjectError'             => :conflict,
       'ActiveRecord::RecordInvalid'                => :unprocessable_entity,
@@ -28,7 +43,7 @@ module ActionDispatch
     @@rescue_templates.update({
       'ActionView::MissingTemplate'         => 'missing_template',
       'ActionController::RoutingError'      => 'routing_error',
-      ActionController::UnknownAction.name  => 'unknown_action',
+      'AbstractController::ActionNotFound'  => 'unknown_action',
       'ActionView::Template::Error'         => 'template_error'
     })
 
@@ -70,7 +85,10 @@ module ActionDispatch
       def rescue_action_locally(request, exception)
         template = ActionView::Base.new([RESCUES_TEMPLATE_PATH],
           :request => request,
-          :exception => exception
+          :exception => exception,
+          :application_trace => application_trace(exception),
+          :framework_trace => framework_trace(exception),
+          :full_trace => full_trace(exception)
         )
         file = "rescues/#{@@rescue_templates[exception.class.name]}.erb"
         body = template.render(:file => file, :layout => 'rescues/layout.erb')
@@ -100,11 +118,11 @@ module ActionDispatch
 
       # True if the request came from localhost, 127.0.0.1.
       def local_request?(request)
-        request.remote_addr == LOCALHOST && request.remote_ip == LOCALHOST
+        LOCALHOST.any?{ |local_ip| request.remote_addr == local_ip && request.remote_ip == local_ip }
       end
 
       def status_code(exception)
-        interpret_status(@@rescue_responses[exception.class.name]).to_i
+        Rack::Utils.status_code(@@rescue_responses[exception.class.name])
       end
 
       def render(status, body)
@@ -130,9 +148,21 @@ module ActionDispatch
         end
       end
 
-      def clean_backtrace(exception)
+      def application_trace(exception)
+        clean_backtrace(exception, :silent)
+      end
+
+      def framework_trace(exception)
+        clean_backtrace(exception, :noise)
+      end
+
+      def full_trace(exception)
+        clean_backtrace(exception, :all)
+      end
+
+      def clean_backtrace(exception, *args)
         defined?(Rails) && Rails.respond_to?(:backtrace_cleaner) ?
-          Rails.backtrace_cleaner.clean(exception.backtrace) :
+          Rails.backtrace_cleaner.clean(exception.backtrace, *args) :
           exception.backtrace
       end
 

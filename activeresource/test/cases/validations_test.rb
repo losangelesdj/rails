@@ -24,12 +24,25 @@ class ValidationsTest < ActiveModel::TestCase
 
     assert p.save, "should have saved after fixing the validation, but had: #{p.errors.inspect}"
   end
-  
+
   def test_fails_save!
     p = new_project(:name => nil)
     assert_raise(ActiveResource::ResourceInvalid) { p.save! }
   end
 
+  def test_save_without_validation
+    p = new_project(:name => nil)
+    assert !p.save
+    assert p.save(:validate => false)
+  end
+
+  def test_deprecated_save_without_validation
+    p = new_project(:name => nil)
+    assert !p.save
+    assert_deprecated do
+      assert p.save(false)
+    end
+  end
 
   def test_validate_callback
     # we have a callback ensuring the description is longer than three letters

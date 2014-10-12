@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2004-2009 David Heinemeier Hansson
+# Copyright (c) 2004-2010 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,40 +21,41 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-require File.join(File.dirname(__FILE__), "action_pack")
+activesupport_path = File.expand_path('../../../activesupport/lib', __FILE__)
+$:.unshift(activesupport_path) if File.directory?(activesupport_path) && !$:.include?(activesupport_path)
+require 'active_support/ruby/shim'
+require 'active_support/core_ext/class/attribute_accessors'
+
+require 'action_pack'
 
 module ActionView
   extend ActiveSupport::Autoload
 
-  autoload :Base
-  autoload :Context
-  autoload :Template
-  autoload :Helpers
-  autoload :SafeBuffer
+  eager_autoload do
+    autoload :Context
+    autoload :Template
+    autoload :Helpers
 
+    autoload_under "render" do
+      autoload :Partials
+      autoload :Rendering
+    end
 
-  autoload_under "render" do
-    autoload :Partials
-    autoload :Rendering
+    autoload :MissingTemplate,   'action_view/base'
+    autoload :Resolver,          'action_view/template/resolver'
+    autoload :PathResolver,      'action_view/template/resolver'
+    autoload :PathSet,           'action_view/paths'
+    autoload :FileSystemResolverWithFallback, 'action_view/template/resolver'
+
+    autoload :TemplateError,     'action_view/template/error'
+    autoload :TemplateHandler,   'action_view/template'
+    autoload :TemplateHandlers,  'action_view/template'
   end
 
-  autoload :MissingTemplate,   'action_view/base'
-  autoload :Resolver,          'action_view/template/resolver'
-  autoload :PathResolver,      'action_view/template/resolver'
-  autoload :PathSet,           'action_view/paths'
-  autoload :FileSystemResolverWithFallback, 'action_view/template/resolver'
-
-  autoload :TemplateError,     'action_view/template/error'
-  autoload :TemplateHandler,   'action_view/template'
-  autoload :TemplateHandlers,  'action_view/template'
+  autoload :TestCase, 'action_view/test_case'
 end
 
-require 'action_view/erb/util'
-
+require 'active_support/core_ext/string/output_safety'
+require 'action_view/base'
 
 I18n.load_path << "#{File.dirname(__FILE__)}/action_view/locale/en.yml"
-
-activesupport_path = "#{File.dirname(__FILE__)}/../../activesupport/lib"
-$:.unshift activesupport_path if File.directory?(activesupport_path)
-require 'active_support'
-require 'active_support/core_ext/class/attribute_accessors'

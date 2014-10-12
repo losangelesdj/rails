@@ -44,16 +44,16 @@ module ActionView #:nodoc:
           return template
         end
       end
-      
-      raise ActionView::MissingTemplate.new(self, "#{prefix}/#{path} - #{details.inspect} - partial: #{!!partial}")
+
+      raise ActionView::MissingTemplate.new(self, "#{prefix}/#{path}", details, partial)
     end
-    
+
     def exists?(path, extension = nil, prefix = nil, partial = false)
       template_path = path.sub(/^\//, '')
 
       each do |load_path|
         return true if template = load_path.find(template_path, extension, prefix, partial)
-      end      
+      end
       false
     end
 

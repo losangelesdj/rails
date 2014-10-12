@@ -1,8 +1,9 @@
 require 'active_support/basic_object'
 require 'active_support/core_ext/array/conversions'
+require 'active_support/core_ext/object/acts_like'
 
 module ActiveSupport
-  # Provides accurate date and time measurements using Date#advance and 
+  # Provides accurate date and time measurements using Date#advance and
   # Time#advance, respectively. It mainly supports the methods on Numeric,
   # such as in this example:
   #
@@ -35,7 +36,7 @@ module ActiveSupport
     end
 
     def is_a?(klass) #:nodoc:
-      klass == Duration || super
+      Duration == klass || value.is_a?(klass)
     end
 
     # Returns true if <tt>other</tt> is also a Duration instance with the
@@ -49,7 +50,9 @@ module ActiveSupport
     end
 
     def self.===(other) #:nodoc:
-      other.is_a?(Duration) rescue super
+      other.is_a?(Duration)
+    rescue ::NoMethodError
+      false
     end
 
     # Calculates a new Time or Date that is as far in the future

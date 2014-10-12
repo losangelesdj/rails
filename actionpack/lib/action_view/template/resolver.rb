@@ -1,5 +1,6 @@
 require "pathname"
 require "active_support/core_ext/class"
+require "active_support/core_ext/array/wrap"
 require "action_view/template"
 
 module ActionView
@@ -11,7 +12,7 @@ module ActionView
 
     def self.register_detail(name, options = {})
       registered_details[name] = lambda do |val|
-        val ||= yield
+        val = Array.wrap(val || yield)
         val |= [nil] unless options[:allow_nil] == false
         val
       end
@@ -19,7 +20,7 @@ module ActionView
 
     register_detail(:locale)  { [I18n.locale] }
     register_detail(:formats) { Mime::SET.symbols }
-    register_detail(:handlers, :allow_nil => false) do
+    register_detail(:handlers) do
       Template::Handlers.extensions
     end
 
@@ -103,33 +104,32 @@ module ActionView
     end
 
     def query(path, exts)
-      query = "#{@path}/#{path}"
+      query = File.join(@path, path)
       exts.each do |ext|
         query << '{' << ext.map {|e| e && ".#{e}" }.join(',') << '}'
       end
 
-      Dir[query].map do |path|
-        next if File.directory?(path)
-        source = File.read(path)
-        identifier = Pathname.new(path).expand_path.to_s
-
-        Template.new(source, identifier, *path_to_details(path))
-      end.compact
+      Dir[query].reject { |p| File.directory?(p) }.map do |p|
+        Template.new(File.read(p), File.expand_path(p), *path_to_details(p))
+      end
     end
 
     # # TODO: fix me
     # # :api: plugin
     def path_to_details(path)
       # [:erb, :format => :html, :locale => :en, :partial => true/false]
-      if m = path.match(%r'(?:^|/)(_)?[\w-]+((?:\.[\w-]+)*)\.(\w+)$')
-        partial = m[1] == '_'
-        details = (m[2]||"").split('.').reject { |e| e.empty? }
-        handler = Template.handler_class_for_extension(m[3])
+      if m = path.match(%r'((^|.*/)(_)?[\w-]+)((?:\.[\w-]+)*)\.(\w+)$')
+        partial = m[3] == '_'
+        details = (m[4]||"").split('.').reject { |e| e.empty? }
+        handler = Template.handler_class_for_extension(m[5])
 
         format  = Mime[details.last] && details.pop.to_sym
         locale  = details.last && details.pop.to_sym
 
-        return handler, :format => format, :locale => locale, :partial => partial
+        virtual_path = (m[1].gsub("#{@path}/", "") << details.join("."))
+
+        return handler, :format => format, :locale => locale, :partial => partial,
+                        :virtual_path => virtual_path
       end
     end
   end
@@ -142,8 +142,7 @@ module ActionView
     end
   end
 
-  # OMG HAX
-  # TODO: remove hax
+  # TODO: remove hack
   class FileSystemResolverWithFallback < Resolver
     def initialize(path, options = {})
       super(options)

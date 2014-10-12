@@ -214,8 +214,10 @@ module ActiveRecord
       end
 
       def check_validity_of_inverse!
-        if has_inverse? && inverse_of.nil?
-          raise InverseOfAssociationNotFoundError.new(self)
+        unless options[:polymorphic]
+          if has_inverse? && inverse_of.nil?
+            raise InverseOfAssociationNotFoundError.new(self)
+          end
         end
       end
 
@@ -237,15 +239,46 @@ module ActiveRecord
       def inverse_of
         if has_inverse?
           @inverse_of ||= klass.reflect_on_association(options[:inverse_of])
-        else
-          nil
         end
+      end
+
+      def polymorphic_inverse_of(associated_class)
+        if has_inverse?
+          if inverse_relationship = associated_class.reflect_on_association(options[:inverse_of])
+            inverse_relationship
+          else
+            raise InverseOfAssociationNotFoundError.new(self, associated_class)
+          end
+        end
+      end
+
+      # Returns whether or not this association reflection is for a collection
+      # association. Returns +true+ if the +macro+ is one of +has_many+ or
+      # +has_and_belongs_to_many+, +false+ otherwise.
+      def collection?
+        if @collection.nil?
+          @collection = [:has_many, :has_and_belongs_to_many].include?(macro)
+        end
+        @collection
+      end
+
+      # Returns whether or not the association should be validated as part of
+      # the parent's validation.
+      #
+      # Unless you explicitely disable validation with
+      # <tt>:validate => false</tt>, it will take place when:
+      #
+      # * you explicitely enable validation; <tt>:validate => true</tt>
+      # * you use autosave; <tt>:autosave => true</tt>
+      # * the association is a +has_many+ association
+      def validate?
+        !options[:validate].nil? ? options[:validate] : (options[:autosave] == true || macro == :has_many)
       end
 
       private
         def derive_class_name
           class_name = name.to_s.camelize
-          class_name = class_name.singularize if [ :has_many, :has_and_belongs_to_many ].include?(macro)
+          class_name = class_name.singularize if collection?
           class_name
         end
 

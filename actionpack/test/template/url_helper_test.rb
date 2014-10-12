@@ -76,8 +76,15 @@ class UrlHelperTest < ActionView::TestCase
 
   def test_button_to_with_javascript_confirm
     assert_dom_equal(
-      "<form method=\"post\" action=\"http://www.example.com\" class=\"button-to\"><div><input onclick=\"return confirm('Are you sure?');\" type=\"submit\" value=\"Hello\" /></div></form>",
+      "<form method=\"post\" action=\"http://www.example.com\" class=\"button-to\"><div><input data-confirm=\"Are you sure?\" type=\"submit\" value=\"Hello\" /></div></form>",
       button_to("Hello", "http://www.example.com", :confirm => "Are you sure?")
+    )
+  end
+
+  def test_button_to_with_remote_and_javascript_confirm
+    assert_dom_equal(
+      "<form method=\"post\" action=\"http://www.example.com\" class=\"button-to\" data-remote=\"true\"><div><input data-confirm=\"Are you sure?\" type=\"submit\" value=\"Hello\" /></div></form>",
+      button_to("Hello", "http://www.example.com", :remote => true, :confirm => "Are you sure?")
     )
   end
 
@@ -170,83 +177,60 @@ class UrlHelperTest < ActionView::TestCase
 
   def test_link_tag_with_javascript_confirm
     assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"return confirm('Are you sure?');\">Hello</a>",
+      "<a href=\"http://www.example.com\" data-confirm=\"Are you sure?\">Hello</a>",
       link_to("Hello", "http://www.example.com", :confirm => "Are you sure?")
     )
     assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"return confirm('You can\\'t possibly be sure, can you?');\">Hello</a>",
+      "<a href=\"http://www.example.com\" data-confirm=\"You can't possibly be sure, can you?\">Hello</a>",
       link_to("Hello", "http://www.example.com", :confirm => "You can't possibly be sure, can you?")
     )
     assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"return confirm('You can\\'t possibly be sure,\\n can you?');\">Hello</a>",
+      "<a href=\"http://www.example.com\" data-confirm=\"You can't possibly be sure,\n can you?\">Hello</a>",
       link_to("Hello", "http://www.example.com", :confirm => "You can't possibly be sure,\n can you?")
     )
   end
 
-  def test_link_tag_with_popup
+  def test_link_to_with_remote
     assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"window.open(this.href);return false;\">Hello</a>",
-      link_to("Hello", "http://www.example.com", :popup => true)
-    )
-    assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"window.open(this.href);return false;\">Hello</a>",
-      link_to("Hello", "http://www.example.com", :popup => 'true')
-    )
-    assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"window.open(this.href,'window_name','width=300,height=300');return false;\">Hello</a>",
-      link_to("Hello", "http://www.example.com", :popup => ['window_name', 'width=300,height=300'])
-    )
-  end
-
-  def test_link_tag_with_popup_and_javascript_confirm
-    assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"if (confirm('Fo\\' sho\\'?')) { window.open(this.href); };return false;\">Hello</a>",
-      link_to("Hello", "http://www.example.com", { :popup => true, :confirm => "Fo' sho'?" })
-    )
-    assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"if (confirm('Are you serious?')) { window.open(this.href,'window_name','width=300,height=300'); };return false;\">Hello</a>",
-      link_to("Hello", "http://www.example.com", { :popup => ['window_name', 'width=300,height=300'], :confirm => "Are you serious?" })
+      "<a href=\"http://www.example.com\" data-remote=\"true\">Hello</a>",
+      link_to("Hello", "http://www.example.com", :remote => true)
     )
   end
 
   def test_link_tag_using_post_javascript
     assert_dom_equal(
-      "<a href='http://www.example.com' onclick=\"var f = document.createElement('form'); f.style.display = 'none'; this.parentNode.appendChild(f); f.method = 'POST'; f.action = this.href;f.submit();return false;\">Hello</a>",
+      "<a href='http://www.example.com' data-method=\"post\" rel=\"nofollow\">Hello</a>",
       link_to("Hello", "http://www.example.com", :method => :post)
     )
   end
 
   def test_link_tag_using_delete_javascript
     assert_dom_equal(
-      "<a href='http://www.example.com' onclick=\"var f = document.createElement('form'); f.style.display = 'none'; this.parentNode.appendChild(f); f.method = 'POST'; f.action = this.href;var m = document.createElement('input'); m.setAttribute('type', 'hidden'); m.setAttribute('name', '_method'); m.setAttribute('value', 'delete'); f.appendChild(m);f.submit();return false;\">Destroy</a>",
+      "<a href='http://www.example.com' rel=\"nofollow\" data-method=\"delete\">Destroy</a>",
       link_to("Destroy", "http://www.example.com", :method => :delete)
     )
   end
 
   def test_link_tag_using_delete_javascript_and_href
     assert_dom_equal(
-      "<a href='\#' onclick=\"var f = document.createElement('form'); f.style.display = 'none'; this.parentNode.appendChild(f); f.method = 'POST'; f.action = 'http://www.example.com';var m = document.createElement('input'); m.setAttribute('type', 'hidden'); m.setAttribute('name', '_method'); m.setAttribute('value', 'delete'); f.appendChild(m);f.submit();return false;\">Destroy</a>",
+      "<a href='\#' rel=\"nofollow\" data-method=\"delete\">Destroy</a>",
       link_to("Destroy", "http://www.example.com", :method => :delete, :href => '#')
     )
   end
 
   def test_link_tag_using_post_javascript_and_confirm
     assert_dom_equal(
-      "<a href=\"http://www.example.com\" onclick=\"if (confirm('Are you serious?')) { var f = document.createElement('form'); f.style.display = 'none'; this.parentNode.appendChild(f); f.method = 'POST'; f.action = this.href;f.submit(); };return false;\">Hello</a>",
+      "<a href=\"http://www.example.com\" data-method=\"post\" rel=\"nofollow\" data-confirm=\"Are you serious?\">Hello</a>",
       link_to("Hello", "http://www.example.com", :method => :post, :confirm => "Are you serious?")
     )
   end
 
   def test_link_tag_using_delete_javascript_and_href_and_confirm
     assert_dom_equal(
-      "<a href='\#' onclick=\"if (confirm('Are you serious?')) { var f = document.createElement('form'); f.style.display = 'none'; this.parentNode.appendChild(f); f.method = 'POST'; f.action = 'http://www.example.com';var m = document.createElement('input'); m.setAttribute('type', 'hidden'); m.setAttribute('name', '_method'); m.setAttribute('value', 'delete'); f.appendChild(m);f.submit(); };return false;\">Destroy</a>",
+      "<a href='\#' rel=\"nofollow\" data-confirm=\"Are you serious?\" data-method=\"delete\">Destroy</a>",
       link_to("Destroy", "http://www.example.com", :method => :delete, :href => '#', :confirm => "Are you serious?"),
       "When specifying url, form should be generated with it, but not this.href"
     )
-  end
-
-  def test_link_tag_using_post_javascript_and_popup
-    assert_raise(ActionView::ActionViewError) { link_to("Hello", "http://www.example.com", :popup => true, :method => :post, :confirm => "Are you serious?") }
   end
 
   def test_link_tag_using_block_in_erb
@@ -362,7 +346,7 @@ class UrlHelperTest < ActionView::TestCase
   end
 
   def test_mail_to_with_img
-    assert_dom_equal %(<a href="mailto:feedback@example.com"><img src="/feedback.png" /></a>), mail_to('feedback@example.com', '<img src="/feedback.png" />')
+    assert_dom_equal %(<a href="mailto:feedback@example.com"><img src="/feedback.png" /></a>), mail_to('feedback@example.com', '<img src="/feedback.png" />'.html_safe)
   end
 
   def test_mail_to_with_hex
@@ -515,14 +499,14 @@ end
 class Workshop
   extend ActiveModel::Naming
   include ActiveModel::Conversion
-  attr_accessor :id, :new_record
+  attr_accessor :id
 
-  def initialize(id, new_record)
-    @id, @new_record = id, new_record
+  def initialize(id)
+    @id = id
   end
 
-  def new_record?
-    @new_record
+  def persisted?
+    id.present?
   end
 
   def to_s
@@ -533,14 +517,14 @@ end
 class Session
   extend ActiveModel::Naming
   include ActiveModel::Conversion
-  attr_accessor :id, :workshop_id, :new_record
+  attr_accessor :id, :workshop_id
 
-  def initialize(id, new_record)
-    @id, @new_record = id, new_record
+  def initialize(id)
+    @id = id
   end
 
-  def new_record?
-    @new_record
+  def persisted?
+    id.present?
   end
 
   def to_s
@@ -550,12 +534,12 @@ end
 
 class WorkshopsController < ActionController::Base
   def index
-    @workshop = Workshop.new(1, true)
+    @workshop = Workshop.new(nil)
     render :inline => "<%= url_for(@workshop) %>\n<%= link_to('Workshop', @workshop) %>"
   end
 
   def show
-    @workshop = Workshop.new(params[:id], false)
+    @workshop = Workshop.new(params[:id])
     render :inline => "<%= url_for(@workshop) %>\n<%= link_to('Workshop', @workshop) %>"
   end
 
@@ -564,14 +548,14 @@ end
 
 class SessionsController < ActionController::Base
   def index
-    @workshop = Workshop.new(params[:workshop_id], false)
-    @session = Session.new(1, true)
+    @workshop = Workshop.new(params[:workshop_id])
+    @session = Session.new(nil)
     render :inline => "<%= url_for([@workshop, @session]) %>\n<%= link_to('Session', [@workshop, @session]) %>"
   end
 
   def show
-    @workshop = Workshop.new(params[:workshop_id], false)
-    @session = Session.new(params[:id], false)
+    @workshop = Workshop.new(params[:workshop_id])
+    @session = Session.new(params[:id])
     render :inline => "<%= url_for([@workshop, @session]) %>\n<%= link_to('Session', [@workshop, @session]) %>"
   end
 
@@ -581,8 +565,8 @@ end
 class PolymorphicControllerTest < ActionController::TestCase
   def setup
     super
-    @request    = ActionController::TestRequest.new
-    @response   = ActionController::TestResponse.new
+    @request  = ActionController::TestRequest.new
+    @response = ActionController::TestResponse.new
   end
 
   def test_new_resource

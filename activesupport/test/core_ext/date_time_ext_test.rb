@@ -230,7 +230,7 @@ class DateTimeExtCalculationsTest < Test::Unit::TestCase
     assert_equal false,  DateTime.civil(2005,2,10,15,30,45, Rational(-18000, 86400)).past?
     assert_equal false,  DateTime.civil(2005,2,10,15,30,46, Rational(-18000, 86400)).past?
   end
-  
+
   def test_past_without_offset
     DateTime.stubs(:current).returns(DateTime.civil(2005,2,10,15,30,45, Rational(-18000, 86400)))
     assert_equal true,  DateTime.civil(2005,2,10,20,30,44).past?
@@ -348,6 +348,10 @@ class DateTimeExtCalculationsTest < Test::Unit::TestCase
   def test_to_f
     assert_equal 946684800.0, DateTime.civil(2000).to_f
     assert_equal 946684800.0, DateTime.civil(1999,12,31,19,0,0,Rational(-5,24)).to_f
+  end
+
+  def test_to_i
+    assert_equal 946684800, DateTime.civil(2000).to_i
   end
 
   protected

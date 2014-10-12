@@ -14,7 +14,7 @@ module ActiveSupport
         end
         {}
       end
-      
+
       def config
         self.config = get_config unless @config
         @config

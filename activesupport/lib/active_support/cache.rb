@@ -4,6 +4,7 @@ require 'active_support/core_ext/benchmark'
 require 'active_support/core_ext/exception'
 require 'active_support/core_ext/class/attribute_accessors'
 require 'active_support/core_ext/object/to_param'
+require 'active_support/core_ext/string/inflections'
 
 module ActiveSupport
   # See ActiveSupport::Cache::Store for documentation.
@@ -29,7 +30,7 @@ module ActiveSupport
     #
     #   ActiveSupport::Cache.lookup_store(:memory_store)
     #   # => returns a new ActiveSupport::Cache::MemoryStore object
-    #   
+    #
     #   ActiveSupport::Cache.lookup_store(:mem_cache_store)
     #   # => returns a new ActiveSupport::Cache::MemCacheStore object
     #
@@ -96,7 +97,7 @@ module ActiveSupport
     # Ruby objects, but don't count on every cache store to be able to do that.
     #
     #   cache = ActiveSupport::Cache::MemoryStore.new
-    #   
+    #
     #   cache.read("city")   # => nil
     #   cache.write("city", "Duckburgh")
     #   cache.read("city")   # => "Duckburgh"
@@ -138,7 +139,7 @@ module ActiveSupport
       #
       #   cache.write("today", "Monday")
       #   cache.fetch("today")  # => "Monday"
-      #   
+      #
       #   cache.fetch("city")   # => nil
       #   cache.fetch("city") do
       #     "Duckburgh"
@@ -197,7 +198,7 @@ module ActiveSupport
       # You may also specify additional options via the +options+ argument.
       # The specific cache store implementation will decide what to do with
       # +options+.
-      # 
+      #
       # For example, MemCacheStore supports the +:expires_in+ option, which
       # tells the memcached server to automatically expire the cache item after
       # a certain period:
@@ -246,13 +247,13 @@ module ActiveSupport
           expires_in || 0
         end
 
-        def instrument(operation, key, options, &block)
+        def instrument(operation, key, options)
           log(operation, key, options)
 
           if self.class.instrument
             payload = { :key => key }
             payload.merge!(options) if options.is_a?(Hash)
-            ActiveSupport::Notifications.instrument(:"cache_#{operation}", payload, &block)
+            ActiveSupport::Notifications.instrument("active_support.cache_#{operation}", payload){ yield }
           else
             yield
           end

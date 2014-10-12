@@ -1,7 +1,7 @@
 require 'abstract_unit'
 require 'active_support/core_ext/kernel/reporting'
 
-ActionController::Base.helpers_dir = File.dirname(__FILE__) + '/../fixtures/helpers'
+ActionController::Base.helpers_path = [File.dirname(__FILE__) + '/../fixtures/helpers']
 
 module Fun
   class GamesController < ActionController::Base
@@ -31,7 +31,7 @@ module LocalAbcHelper
   def c() end
 end
 
-class HelperTest < Test::Unit::TestCase
+class HelperTest < ActiveSupport::TestCase
   class TestController < ActionController::Base
     attr_accessor :delegate_attr
     def delegate_method() end
@@ -50,7 +50,7 @@ class HelperTest < Test::Unit::TestCase
     # Set default test helper.
     self.test_helper = LocalAbcHelper
   end
-  
+
   def test_deprecated_helper
     assert_equal expected_helper_methods, missing_methods
     assert_nothing_raised { @controller_class.helper TestHelper }
@@ -70,25 +70,25 @@ class HelperTest < Test::Unit::TestCase
 
   def call_controller(klass, action)
     request  = ActionController::TestRequest.new
-    klass.action(action).call(request.env)    
+    klass.action(action).call(request.env)
   end
 
   def test_helper_for_nested_controller
-    assert_equal 'hello: Iz guuut!', 
+    assert_equal 'hello: Iz guuut!',
       call_controller(Fun::GamesController, "render_hello_world").last.body
     # request  = ActionController::TestRequest.new
-    # 
+    #
     # resp = Fun::GamesController.action(:render_hello_world).call(request.env)
     # assert_equal 'hello: Iz guuut!', resp.last.body
   end
 
   def test_helper_for_acronym_controller
     assert_equal "test: baz", call_controller(Fun::PdfController, "test").last.body
-    # 
+    #
     # request  = ActionController::TestRequest.new
     # response = ActionController::TestResponse.new
     # request.action = 'test'
-    # 
+    #
     # assert_equal 'test: baz', Fun::PdfController.process(request, response).body
   end
 
@@ -106,7 +106,7 @@ class HelperTest < Test::Unit::TestCase
   end
 
   def test_all_helpers_with_alternate_helper_dir
-    @controller_class.helpers_dir = File.dirname(__FILE__) + '/../fixtures/alternate_helpers'
+    @controller_class.helpers_path = [File.dirname(__FILE__) + '/../fixtures/alternate_helpers']
 
     # Reload helpers
     @controller_class._helpers = Module.new
@@ -135,6 +135,17 @@ class HelperTest < Test::Unit::TestCase
     assert methods.include?('foobar')
   end
 
+  def test_deprecation
+    assert_deprecated do
+      ActionController::Base.helpers_dir = "some/foo/bar"
+    end
+    assert_deprecated do
+      assert_equal ["some/foo/bar"], ActionController::Base.helpers_dir
+    end
+  ensure
+    ActionController::Base.helpers_path = [File.dirname(__FILE__) + '/../fixtures/helpers']
+  end
+
   private
     def expected_helper_methods
       TestHelper.instance_methods.map {|m| m.to_s }
@@ -154,7 +165,7 @@ class HelperTest < Test::Unit::TestCase
 end
 
 
-class IsolatedHelpersTest < Test::Unit::TestCase
+class IsolatedHelpersTest < ActiveSupport::TestCase
   class A < ActionController::Base
     def index
       render :inline => '<%= shout %>'
@@ -181,7 +192,7 @@ class IsolatedHelpersTest < Test::Unit::TestCase
 
   def call_controller(klass, action)
     request  = ActionController::TestRequest.new
-    klass.action(action).call(request.env)    
+    klass.action(action).call(request.env)
   end
 
   def setup

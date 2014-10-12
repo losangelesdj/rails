@@ -2,6 +2,31 @@ require 'abstract_unit'
 require 'active_support/time'
 
 class DurationTest < ActiveSupport::TestCase
+  def test_is_a
+    d = 1.day
+    assert d.is_a?(ActiveSupport::Duration)
+    assert d.is_a?(Numeric)
+    assert d.is_a?(Fixnum)
+    assert !d.is_a?(Hash)
+
+    k = Class.new
+    class << k; undef_method :== end
+    assert !d.is_a?(k)
+  end
+
+  def test_threequals
+    assert ActiveSupport::Duration === 1.day
+    assert !(ActiveSupport::Duration === 1.day.to_i)
+    assert !(ActiveSupport::Duration === 'foo')
+    assert !(ActiveSupport::Duration === ActiveSupport::BasicObject.new)
+  end
+
+  def test_equals
+    assert 1.day == 1.day
+    assert 1.day == 1.day.to_i
+    assert !(1.day == 'foo')
+  end
+
   def test_inspect
     assert_equal '0 seconds',                       0.seconds.inspect
     assert_equal '1 month',                         1.month.inspect
@@ -91,13 +116,13 @@ class DurationTest < ActiveSupport::TestCase
   ensure
     Time.zone_default = nil
   end
-  
+
   def test_adding_hours_across_dst_boundary
     with_env_tz 'CET' do
       assert_equal Time.local(2009,3,29,0,0,0) + 24.hours, Time.local(2009,3,30,1,0,0)
     end
   end
-  
+
   def test_adding_day_across_dst_boundary
     with_env_tz 'CET' do
       assert_equal Time.local(2009,3,29,0,0,0) + 1.day, Time.local(2009,3,30,0,0,0)

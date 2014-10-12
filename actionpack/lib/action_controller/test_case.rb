@@ -1,8 +1,5 @@
-require 'active_support/test_case'
 require 'rack/session/abstract/id'
-require 'action_controller/metal/testing'
-require 'action_controller/testing/process'
-require 'action_dispatch/test_case'
+require 'action_view/test_case'
 
 module ActionController
   class TestRequest < ActionDispatch::TestRequest #:nodoc:
@@ -22,7 +19,7 @@ module ActionController
 
     def assign_parameters(controller_path, action, parameters = {})
       parameters = parameters.symbolize_keys.merge(:controller => controller_path, :action => action)
-      extra_keys = ActionController::Routing::Routes.extra_keys(parameters)
+      extra_keys = ActionDispatch::Routing::Routes.extra_keys(parameters)
       non_path_parameters = get? ? query_parameters : request_parameters
       parameters.each do |key, value|
         if value.is_a? Fixnum
@@ -183,7 +180,7 @@ module ActionController
   #
   #  assert_redirected_to page_url(:title => 'foo')
   class TestCase < ActiveSupport::TestCase
-    include TestProcess
+    include ActionDispatch::TestProcess
 
     # Executes a request simulating GET HTTP method and set/volley the response
     def get(action, parameters = nil, session = nil, flash = nil)
@@ -242,13 +239,15 @@ module ActionController
       @request.assign_parameters(@controller.class.name.underscore.sub(/_controller$/, ''), action.to_s, parameters)
 
       @request.session = ActionController::TestSession.new(session) unless session.nil?
-      @request.session["flash"] = ActionController::Flash::FlashHash.new.update(flash) if flash
+      @request.session["flash"] = @request.flash.update(flash || {})
+      @request.session["flash"].sweep
 
       @controller.request = @request
       @controller.params.merge!(parameters)
       build_request_uri(action, parameters)
       Base.class_eval { include Testing }
       @controller.process_with_new_base_test(@request, @response)
+      @request.session.delete('flash') if @request.session['flash'].blank?
       @response
     end
 

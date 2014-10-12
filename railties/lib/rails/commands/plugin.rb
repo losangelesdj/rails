@@ -2,8 +2,8 @@
 #
 # Installing plugins:
 #
-#   $ ./script/plugin install continuous_builder asset_timestamping
-# 
+#   $ rails plugin install continuous_builder asset_timestamping
+#
 # Specifying revisions:
 #
 #   * Subversion revision is a single integer.
@@ -14,7 +14,7 @@
 #              'tag 1.8.0' (equivalent to 'refs/tags/1.8.0')
 #
 #
-# This is Free Software, copyright 2005 by Ryan Tomayko (rtomayko@gmail.com) 
+# This is Free Software, copyright 2005 by Ryan Tomayko (rtomayko@gmail.com)
 # and is licensed MIT: (http://www.opensource.org/licenses/mit-license.php)
 
 $verbose = false
@@ -40,18 +40,18 @@ class RailsEnvironment
       dir = File.dirname(dir)
     end
   end
-  
+
   def self.default
     @default ||= find
   end
-  
+
   def self.default=(rails_env)
     @default = rails_env
   end
-  
+
   def install(name_uri_or_plugin)
     if name_uri_or_plugin.is_a? String
-      if name_uri_or_plugin =~ /:\/\// 
+      if name_uri_or_plugin =~ /:\/\//
         plugin = Plugin.new(name_uri_or_plugin)
       else
         plugin = Plugins[name_uri_or_plugin]
@@ -65,7 +65,7 @@ class RailsEnvironment
       puts "Plugin not found: #{name_uri_or_plugin}"
     end
   end
- 
+
   def use_svn?
     require 'active_support/core_ext/kernel'
     silence_stderr {`svn --version` rescue nil}
@@ -97,7 +97,7 @@ class RailsEnvironment
     ext = `svn propget svn:externals "#{root}/vendor/plugins"`
     lines = ext.respond_to?(:lines) ? ext.lines : ext
     lines.reject{ |line| line.strip == '' }.map do |line|
-      line.strip.split(/\s+/, 2) 
+      line.strip.split(/\s+/, 2)
     end
   end
 
@@ -111,38 +111,38 @@ class RailsEnvironment
       system("svn propset -q svn:externals -F \"#{file.path}\" \"#{root}/vendor/plugins\"")
     end
   end
-  
+
 end
 
 class Plugin
   attr_reader :name, :uri
-  
+
   def initialize(uri, name = nil)
     @uri = uri
     guess_name(uri)
   end
-  
+
   def self.find(name)
     new(name)
   end
-  
+
   def to_s
     "#{@name.ljust(30)}#{@uri}"
   end
-  
+
   def svn_url?
     @uri =~ /svn(?:\+ssh)?:\/\/*/
   end
-  
+
   def git_url?
     @uri =~ /^git:\/\// || @uri =~ /\.git$/
   end
-  
+
   def installed?
     File.directory?("#{rails_env.root}/vendor/plugins/#{name}") \
       or rails_env.externals.detect{ |name, repo| self.uri == repo }
   end
-  
+
   def install(method=nil, options = {})
     method ||= rails_env.best_install_method?
     if :http == method
@@ -192,7 +192,7 @@ class Plugin
     FileUtils.rm_rf tmp if svn_url?
   end
 
-  private 
+  private
 
     def run_install_hook
       install_hook_file = "#{rails_env.root}/vendor/plugins/#{name}/install.rb"
@@ -207,11 +207,11 @@ class Plugin
     def install_using_export(options = {})
       svn_command :export, options
     end
-    
+
     def install_using_checkout(options = {})
       svn_command :checkout, options
     end
-    
+
     def install_using_externals(options = {})
       externals = rails_env.externals
       externals.push([@name, uri])
@@ -229,7 +229,7 @@ class Plugin
         fetcher.fetch
       end
     end
-    
+
     def install_using_git(options = {})
       root = rails_env.root
       mkdir_p(install_path = "#{root}/vendor/plugins/#{name}")
@@ -268,7 +268,7 @@ class Plugin
       end
       @name.gsub!(/\.git$/, '') if @name =~ /\.git$/
     end
-    
+
     def rails_env
       @rails_env || RailsEnvironment.default
     end
@@ -283,56 +283,56 @@ module Commands
     def initialize
       @environment = RailsEnvironment.default
       @rails_root = RailsEnvironment.default.root
-      @script_name = File.basename($0) 
+      @script_name = File.basename($0)
       @sources = []
     end
-    
+
     def environment=(value)
       @environment = value
       RailsEnvironment.default = value
     end
-    
+
     def options
       OptionParser.new do |o|
         o.set_summary_indent('  ')
-        o.banner =    "Usage: #{@script_name} [OPTIONS] command"
+        o.banner =    "Usage: plugin [OPTIONS] command"
         o.define_head "Rails plugin manager."
-        
-        o.separator ""        
+
+        o.separator ""
         o.separator "GENERAL OPTIONS"
-        
+
         o.on("-r", "--root=DIR", String,
              "Set an explicit rails app directory.",
              "Default: #{@rails_root}") { |rails_root| @rails_root = rails_root; self.environment = RailsEnvironment.new(@rails_root) }
         o.on("-s", "--source=URL1,URL2", Array,
              "Use the specified plugin repositories instead of the defaults.") { |sources| @sources = sources}
-        
+
         o.on("-v", "--verbose", "Turn on verbose output.") { |verbose| $verbose = verbose }
         o.on("-h", "--help", "Show this help message.") { puts o; exit }
-        
+
         o.separator ""
         o.separator "COMMANDS"
-        
+
         o.separator "  install    Install plugin(s) from known repositories or URLs."
         o.separator "  remove     Uninstall plugins."
-        
+
         o.separator ""
         o.separator "EXAMPLES"
         o.separator "  Install a plugin:"
-        o.separator "    #{@script_name} install continuous_builder\n"
+        o.separator "    #{@script_name} plugin install continuous_builder\n"
         o.separator "  Install a plugin from a subversion URL:"
-        o.separator "    #{@script_name} install http://dev.rubyonrails.com/svn/rails/plugins/continuous_builder\n"
+        o.separator "    #{@script_name} plugin install http://dev.rubyonrails.com/svn/rails/plugins/continuous_builder\n"
         o.separator "  Install a plugin from a git URL:"
-        o.separator "    #{@script_name} install git://github.com/SomeGuy/my_awesome_plugin.git\n"
+        o.separator "    #{@script_name} plugin install git://github.com/SomeGuy/my_awesome_plugin.git\n"
         o.separator "  Install a plugin and add a svn:externals entry to vendor/plugins"
-        o.separator "    #{@script_name} install -x continuous_builder\n"
+        o.separator "    #{@script_name} plugin install -x continuous_builder\n"
       end
     end
-    
+
     def parse!(args=ARGV)
       general, sub = split_args(args)
       options.parse!(general)
-      
+
       command = general.shift
       if command =~ /^(install|remove)$/
         command = Commands.const_get(command.capitalize).new(self)
@@ -343,26 +343,26 @@ module Commands
         exit 1
       end
     end
-    
+
     def split_args(args)
       left = []
       left << args.shift while args[0] and args[0] =~ /^-/
       left << args.shift if args[0]
       return [left, args]
     end
-    
+
     def self.parse!(args=ARGV)
       Plugin.new.parse!(args)
     end
   end
-  
+
   class Install
     def initialize(base_command)
       @base_command = base_command
       @method = :http
       @options = { :quiet => false, :revision => nil, :force => false }
     end
-    
+
     def options
       OptionParser.new do |o|
         o.set_summary_indent('  ')
@@ -370,8 +370,8 @@ module Commands
         o.define_head "Install one or more plugins."
         o.separator   ""
         o.separator   "Options:"
-        o.on(         "-x", "--externals", 
-                      "Use svn:externals to grab the plugin.", 
+        o.on(         "-x", "--externals",
+                      "Use svn:externals to grab the plugin.",
                       "Enables plugin updates and plugin versioning.") { |v| @method = :externals }
         o.on(         "-o", "--checkout",
                       "Use svn checkout to grab the plugin.",
@@ -381,7 +381,7 @@ module Commands
                       "Exports the plugin, allowing you to check it into your local repository. Does not enable updates, or add an svn:externals entry.") { |v| @method = :export }
         o.on(         "-q", "--quiet",
                       "Suppresses the output from installation.",
-                      "Ignored if -v is passed (./script/plugin -v install ...)") { |v| @options[:quiet] = true }
+                      "Ignored if -v is passed (rails plugin -v install ...)") { |v| @options[:quiet] = true }
         o.on(         "-r REVISION", "--revision REVISION",
                       "Checks out the given revision from subversion or git.",
                       "Ignored if subversion/git is not used.") { |v| @options[:revision] = v }
@@ -392,7 +392,7 @@ module Commands
         o.separator   "a plugin repository."
       end
     end
-    
+
     def determine_install_method
       best = @base_command.environment.best_install_method
       @method = :http if best == :http and @method == :export
@@ -410,7 +410,7 @@ module Commands
       end
       @method
     end
-    
+
     def parse!(args)
       options.parse!(args)
       environment = @base_command.environment
@@ -430,7 +430,7 @@ module Commands
     def initialize(base_command)
       @base_command = base_command
     end
-    
+
     def options
       OptionParser.new do |o|
         o.set_summary_indent('  ')
@@ -438,7 +438,7 @@ module Commands
         o.define_head "Remove plugins."
       end
     end
-    
+
     def parse!(args)
       options.parse!(args)
       root = @base_command.environment.root
@@ -470,7 +470,7 @@ module Commands
     end
   end
 end
- 
+
 class RecursiveHTTPFetcher
   attr_accessor :quiet
   def initialize(urls_to_fetch, level = 1, cwd = ".")
@@ -511,7 +511,7 @@ class RecursiveHTTPFetcher
     end
     links
   end
-  
+
   def download(link)
     puts "+ #{File.join(@cwd, File.basename(link))}" unless @quiet
     open(link) do |stream|
@@ -520,13 +520,13 @@ class RecursiveHTTPFetcher
       end
     end
   end
-  
+
   def fetch(links = @urls_to_fetch)
     links.each do |l|
       (l =~ /\/$/ || links == @urls_to_fetch) ? fetch_dir(l) : download(l)
     end
   end
-  
+
   def fetch_dir(url)
     @level += 1
     push_d(File.basename(url)) if @level > 0

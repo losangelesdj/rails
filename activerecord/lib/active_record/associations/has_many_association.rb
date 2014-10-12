@@ -58,7 +58,7 @@ module ActiveRecord
 
         def insert_record(record, force = false, validate = true)
           set_belongs_to_association_for(record)
-          force ? record.save! : record.save(validate)
+          force ? record.save! : record.save(:validate => validate)
         end
 
         # Deletes the records according to the <tt>:dependent</tt> option.
@@ -69,8 +69,8 @@ module ActiveRecord
             when :delete_all
               @reflection.klass.delete(records.map { |record| record.id })
             else
-              relation = arel_table(@reflection.table_name)
-              relation.conditions(relation[@reflection.primary_key_name].eq(@owner.id).
+              relation = Arel::Table.new(@reflection.table_name)
+              relation.where(relation[@reflection.primary_key_name].eq(@owner.id).
                   and(Arel::Predicates::In.new(relation[@reflection.klass.primary_key], records.map(&:id)))
               ).update(relation[@reflection.primary_key_name] => nil)
 

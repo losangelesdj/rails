@@ -6,7 +6,7 @@ require 'active_support/core_ext/kernel/reporting'
 
 module ActionView
   class Base
-    @@field_error_proc = Proc.new{ |html_tag, instance| "<div class=\"fieldWithErrors\">#{html_tag}</div>".html_safe! }
+    @@field_error_proc = Proc.new{ |html_tag, instance| "<div class=\"fieldWithErrors\">#{html_tag}</div>".html_safe }
     cattr_accessor :field_error_proc
   end
 
@@ -80,18 +80,17 @@ module ActionView
         record = convert_to_model(record)
 
         options = options.symbolize_keys
-        options[:action] ||= record.new_record? ? "create" : "update"
+        options[:action] ||= record.persisted? ? "update" : "create"
         action = url_for(:action => options[:action], :id => record)
 
         submit_value = options[:submit_value] || options[:action].gsub(/[^\w]/, '').capitalize
 
         contents = form_tag({:action => action}, :method =>(options[:method] || 'post'), :enctype => options[:multipart] ? 'multipart/form-data': nil)
-        contents << hidden_field(record_name, :id) unless record.new_record?
-        contents << all_input_tags(record, record_name, options)
+        contents.safe_concat hidden_field(record_name, :id) if record.persisted?
+        contents.safe_concat all_input_tags(record, record_name, options)
         yield contents if block_given?
-        contents << submit_tag(submit_value)
-        contents << '</form>'
-        contents.html_safe!
+        contents.safe_concat submit_tag(submit_value)
+        contents.safe_concat('</form>')
       end
 
       # Returns a string containing the error message attached to the +method+ on the +object+ if one exists.
@@ -128,7 +127,7 @@ module ActionView
         if (obj = (object.respond_to?(:errors) ? object : instance_variable_get("@#{object}"))) &&
           (errors = obj.errors[method])
           content_tag("div",
-            "#{options[:prepend_text]}#{ERB::Util.html_escape(errors.first)}#{options[:append_text]}",
+            (options[:prepend_text].html_safe << errors.first).safe_concat(options[:append_text]),
             :class => options[:css_class]
           )
         else
@@ -216,7 +215,7 @@ module ActionView
           end
           options[:object_name] ||= params.first
 
-          I18n.with_options :locale => options[:locale], :scope => [:activemodel, :errors, :template] do |locale|
+          I18n.with_options :locale => options[:locale], :scope => [:errors, :template] do |locale|
             header_message = if options.include?(:header_message)
               options[:header_message]
             else
@@ -227,16 +226,16 @@ module ActionView
 
             error_messages = objects.sum do |object|
               object.errors.full_messages.map do |msg|
-                content_tag(:li, ERB::Util.html_escape(msg))
+                content_tag(:li, msg)
               end
-            end.join
+            end.join.html_safe
 
             contents = ''
             contents << content_tag(options[:header_tag] || :h2, header_message) unless header_message.blank?
             contents << content_tag(:p, message) unless message.blank?
             contents << content_tag(:ul, error_messages)
 
-            content_tag(:div, contents, html)
+            content_tag(:div, contents.html_safe, html)
           end
         else
           ''

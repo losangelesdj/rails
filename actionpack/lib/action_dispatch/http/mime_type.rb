@@ -10,8 +10,8 @@ module Mime
     %w(<< concat shift unshift push pop []= clear compact! collect!
     delete delete_at delete_if flatten! map! insert reject! reverse!
     replace slice! sort! uniq!).each do |method|
-      module_eval <<-CODE
-        def #{method}(*args)
+      module_eval <<-CODE, __FILE__, __LINE__ + 1
+        def #{method}(*)
           @symbols = nil
           super
         end
@@ -104,7 +104,7 @@ module Mime
 
         SET << Mime.const_get(symbol.to_s.upcase)
 
-        ([string] + mime_type_synonyms).each { |string| LOOKUP[string] = SET.last } unless skip_lookup
+        ([string] + mime_type_synonyms).each { |str| LOOKUP[str] = SET.last } unless skip_lookup
         ([symbol.to_s] + extension_synonyms).each { |ext| EXTENSION_LOOKUP[ext] = SET.last }
       end
 
@@ -114,10 +114,10 @@ module Mime
         else
           # keep track of creation order to keep the subsequent sort stable
           list = []
-          accept_header.split(/,/).each_with_index do |header, index| 
-            params, q = header.split(/;\s*q=/)       
+          accept_header.split(/,/).each_with_index do |header, index|
+            params, q = header.split(/;\s*q=/)
             if params
-              params.strip!          
+              params.strip!
               list << AcceptItem.new(index, params, q) unless params.empty?
             end
           end
@@ -166,20 +166,20 @@ module Mime
         end
       end
     end
-    
+
     def initialize(string, symbol = nil, synonyms = [])
       @symbol, @synonyms = symbol, synonyms
       @string = string
     end
-    
+
     def to_s
       @string
     end
-    
+
     def to_str
       to_s
     end
-    
+
     def to_sym
       @symbol || @string.to_sym
     end
@@ -191,11 +191,11 @@ module Mime
         super
       end
     end
-    
+
     def ==(mime_type)
       return false if mime_type.blank?
-      (@synonyms + [ self ]).any? do |synonym| 
-        synonym.to_s == mime_type.to_s || synonym.to_sym == mime_type.to_sym 
+      (@synonyms + [ self ]).any? do |synonym|
+        synonym.to_s == mime_type.to_s || synonym.to_sym == mime_type.to_sym
       end
     end
 

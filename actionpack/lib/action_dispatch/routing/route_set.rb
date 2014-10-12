@@ -5,49 +5,51 @@ module ActionDispatch
   module Routing
     class RouteSet #:nodoc:
       NotFound = lambda { |env|
-        raise ActionController::RoutingError, "No route matches #{env['PATH_INFO'].inspect} with #{env.inspect}"
+        raise ActionController::RoutingError, "No route matches #{env['PATH_INFO'].inspect}"
       }
 
       PARAMETERS_KEY = 'action_dispatch.request.path_parameters'
 
       class Dispatcher
-        def initialize(options = {})
-          defaults = options[:defaults]
+        def initialize(options={})
+          @defaults = options[:defaults]
           @glob_param = options.delete(:glob)
         end
 
         def call(env)
           params = env[PARAMETERS_KEY]
+          prepare_params!(params)
+
+          # Just raise undefined constant errors if a controller was specified as default.
+          unless controller = controller(params, @defaults.key?(:controller))
+            return [404, {'X-Cascade' => 'pass'}, []]
+          end
+
+          controller.action(params[:action]).call(env)
+        end
+
+        def prepare_params!(params)
           merge_default_action!(params)
           split_glob_param!(params) if @glob_param
+
           params.each do |key, value|
             if value.is_a?(String)
               value = value.dup.force_encoding(Encoding::BINARY) if value.respond_to?(:force_encoding)
               params[key] = URI.unescape(value)
             end
           end
+        end
 
-          unless controller = controller(params)
-            return [417, {}, []]
+        def controller(params, raise_error=true)
+          if params && params.has_key?(:controller)
+            controller = "#{params[:controller].camelize}Controller"
+            ActiveSupport::Inflector.constantize(controller)
           end
-
-          if env['action_controller.recognize']
-            [200, {}, params]
-          else
-            controller.action(params[:action]).call(env)
-          end
+        rescue NameError => e
+          raise ActionController::RoutingError, e.message, e.backtrace if raise_error
         end
 
         private
-          def controller(params)
-            if params && params.has_key?(:controller)
-              controller = "#{params[:controller].camelize}Controller"
-              ActiveSupport::Inflector.constantize(controller)
-            end
-          rescue NameError
-            nil
-          end
-
           def merge_default_action!(params)
             params[:action] ||= 'index'
           end
@@ -56,7 +58,6 @@ module ActionDispatch
             params[@glob_param] = params[@glob_param].split('/').map { |v| URI.unescape(v) }
           end
       end
-
 
       # A NamedRouteCollection instance is a collection of named routes, and also
       # maintains an anonymous module that can be used to install helpers for the
@@ -73,9 +74,8 @@ module ActionDispatch
           @routes = {}
           @helpers = []
 
-          @module ||= Module.new
-          @module.instance_methods.each do |selector|
-            @module.class_eval { remove_method selector }
+          @module ||= Module.new do
+            instance_methods.each { |selector| remove_method(selector) }
           end
         end
 
@@ -137,85 +137,109 @@ module ActionDispatch
             end
           end
 
-          def named_helper_module_eval(code, *args)
-            @module.module_eval(code, *args)
-          end
-
           def define_hash_access(route, name, kind, options)
             selector = hash_access_name(name, kind)
-            named_helper_module_eval <<-end_eval # We use module_eval to avoid leaks
+
+            # We use module_eval to avoid leaks
+            @module.module_eval <<-END_EVAL, __FILE__, __LINE__ + 1
               def #{selector}(options = nil)                                      # def hash_for_users_url(options = nil)
                 options ? #{options.inspect}.merge(options) : #{options.inspect}  #   options ? {:only_path=>false}.merge(options) : {:only_path=>false}
               end                                                                 # end
               protected :#{selector}                                              # protected :hash_for_users_url
-            end_eval
+            END_EVAL
             helpers << selector
           end
 
+          # Create a url helper allowing ordered parameters to be associated
+          # with corresponding dynamic segments, so you can do:
+          #
+          #   foo_url(bar, baz, bang)
+          #
+          # Instead of:
+          #
+          #   foo_url(:bar => bar, :baz => baz, :bang => bang)
+          #
+          # Also allow options hash, so you can do:
+          #
+          #   foo_url(bar, baz, bang, :sort_by => 'baz')
+          #
           def define_url_helper(route, name, kind, options)
             selector = url_helper_name(name, kind)
-            # The segment keys used for positional parameters
-
             hash_access_method = hash_access_name(name, kind)
 
-            # allow ordered parameters to be associated with corresponding
-            # dynamic segments, so you can do
+            # We use module_eval to avoid leaks.
             #
-            #   foo_url(bar, baz, bang)
+            # def users_url(*args)
+            #   if args.empty? || Hash === args.first
+            #     options = hash_for_users_url(args.first || {})
+            #   else
+            #     options = hash_for_users_url(args.extract_options!)
+            #     default = default_url_options(options) if self.respond_to?(:default_url_options, true)
+            #     options = (default ||= {}).merge(options)
             #
-            # instead of
+            #     keys = []
+            #     keys -= options.keys if args.size < keys.size - 1
             #
-            #   foo_url(:bar => bar, :baz => baz, :bang => bang)
+            #     args = args.zip(keys).inject({}) do |h, (v, k)|
+            #       h[k] = v
+            #       h
+            #     end
             #
-            # Also allow options hash, so you can do
+            #     # Tell url_for to skip default_url_options
+            #     options[:use_defaults] = false
+            #     options.merge!(args)
+            #   end
             #
-            #   foo_url(bar, baz, bang, :sort_by => 'baz')
-            #
-            named_helper_module_eval <<-end_eval # We use module_eval to avoid leaks
-              def #{selector}(*args)                                                        # def users_url(*args)
-                                                                                            #
-                opts = if args.empty? || Hash === args.first                                #   opts = if args.empty? || Hash === args.first
-                  args.first || {}                                                          #     args.first || {}
-                else                                                                        #   else
-                  options = args.extract_options!                                           #     options = args.extract_options!
-                  args = args.zip(#{route.segment_keys.inspect}).inject({}) do |h, (v, k)|  #     args = args.zip([]).inject({}) do |h, (v, k)|
-                    h[k] = v                                                                #       h[k] = v
-                    h                                                                       #       h
-                  end                                                                       #     end
-                  options.merge(args)                                                       #     options.merge(args)
-                end                                                                         #   end
-                                                                                            #
-                url_for(#{hash_access_method}(opts))                                        #   url_for(hash_for_users_url(opts))
-                                                                                            #
-              end                                                                           # end
-              #Add an alias to support the now deprecated formatted_* URL.                  # #Add an alias to support the now deprecated formatted_* URL.
-              def formatted_#{selector}(*args)                                              # def formatted_users_url(*args)
-                ActiveSupport::Deprecation.warn(                                            #   ActiveSupport::Deprecation.warn(
-                  "formatted_#{selector}() has been deprecated. " +                         #     "formatted_users_url() has been deprecated. " +
-                  "Please pass format to the standard " +                                   #     "Please pass format to the standard " +
-                  "#{selector} method instead.", caller)                                    #     "users_url method instead.", caller)
-                #{selector}(*args)                                                          #   users_url(*args)
-              end                                                                           # end
-              protected :#{selector}                                                        # protected :users_url
-            end_eval
+            #   url_for(options)
+            # end
+            @module.module_eval <<-END_EVAL, __FILE__, __LINE__ + 1
+              def #{selector}(*args)
+                if args.empty? || Hash === args.first
+                  options = #{hash_access_method}(args.first || {})
+                else
+                  options = #{hash_access_method}(args.extract_options!)
+                  default = default_url_options(options) if self.respond_to?(:default_url_options, true)
+                  options = (default ||= {}).merge(options)
+
+                  keys = #{route.segment_keys.inspect}
+                  keys -= options.keys if args.size < keys.size - 1 # take format into account
+
+                  args = args.zip(keys).inject({}) do |h, (v, k)|
+                    h[k] = v
+                    h
+                  end
+
+                  # Tell url_for to skip default_url_options
+                  options[:use_defaults] = false
+                  options.merge!(args)
+                end
+
+                url_for(options)
+              end
+              protected :#{selector}
+            END_EVAL
             helpers << selector
           end
       end
 
-      attr_accessor :routes, :named_routes, :configuration_files, :controller_paths
+      attr_accessor :routes, :named_routes, :controller_namespaces
+      attr_accessor :disable_clear_and_finalize, :resources_path_names
+
+      def self.default_resources_path_names
+        { :new => 'new', :edit => 'edit' }
+      end
 
       def initialize
-        self.configuration_files = []
-        self.controller_paths = []
-
         self.routes = []
         self.named_routes = NamedRouteCollection.new
+        self.resources_path_names = self.class.default_resources_path_names.dup
+        self.controller_namespaces = Set.new
 
-        clear!
+        @disable_clear_and_finalize = false
       end
 
       def draw(&block)
-        clear!
+        clear! unless @disable_clear_and_finalize
 
         mapper = Mapper.new(self)
         if block.arity == 1
@@ -224,12 +248,20 @@ module ActionDispatch
           mapper.instance_exec(&block)
         end
 
+        finalize! unless @disable_clear_and_finalize
+
+        nil
+      end
+
+      def finalize!
         @set.add_route(NotFound)
         install_helpers
         @set.freeze
       end
 
       def clear!
+        # Clear the controller cache so we may discover new ones
+        @controller_constraints = nil
         routes.clear
         named_routes.clear
         @set = ::Rack::Mount::RouteSet.new(:parameters_key => PARAMETERS_KEY)
@@ -244,94 +276,23 @@ module ActionDispatch
         routes.empty?
       end
 
-      def add_configuration_file(path)
-        self.configuration_files << path
-      end
-
-      # Deprecated accessor
-      def configuration_file=(path)
-        add_configuration_file(path)
-      end
-
-      # Deprecated accessor
-      def configuration_file
-        configuration_files
-      end
-
-      def load!
-        # Clear the controller cache so we may discover new ones
-        @controller_constraints = nil
-
-        load_routes!
-      end
-
-      # reload! will always force a reload whereas load checks the timestamp first
-      alias reload! load!
-
-      def reload
-        if configuration_files.any? && @routes_last_modified
-          if routes_changed_at == @routes_last_modified
-            return # routes didn't change, don't reload
-          else
-            @routes_last_modified = routes_changed_at
-          end
-        end
-
-        load!
-      end
-
-      def load_routes!
-        if configuration_files.any?
-          configuration_files.each { |config| load(config) }
-          @routes_last_modified = routes_changed_at
-        else
-          draw do |map|
-            map.connect ":controller/:action/:id"
-          end
-        end
-      end
-
-      def routes_changed_at
-        routes_changed_at = nil
-
-        configuration_files.each do |config|
-          config_changed_at = File.stat(config).mtime
-
-          if routes_changed_at.nil? || config_changed_at > routes_changed_at
-            routes_changed_at = config_changed_at
-          end
-        end
-
-        routes_changed_at
-      end
-
       CONTROLLER_REGEXP = /[_a-zA-Z0-9]+/
 
       def controller_constraints
         @controller_constraints ||= begin
-          source = controller_namespaces.map { |ns| "#{Regexp.escape(ns)}/#{CONTROLLER_REGEXP.source}" }
+          namespaces = controller_namespaces + in_memory_controller_namespaces
+          source = namespaces.map { |ns| "#{Regexp.escape(ns)}/#{CONTROLLER_REGEXP.source}" }
           source << CONTROLLER_REGEXP.source
           Regexp.compile(source.sort.reverse.join('|'))
         end
       end
 
-      def controller_namespaces
+      def in_memory_controller_namespaces
         namespaces = Set.new
-
-        # Find any nested controllers already in memory
         ActionController::Base.subclasses.each do |klass|
           controller_name = klass.underscore
           namespaces << controller_name.split('/')[0...-1].join('/')
         end
-
-        # Find namespaces in controllers/ directory
-        controller_paths.each do |load_path|
-          load_path = File.expand_path(load_path)
-          Dir["#{load_path}/**/*_controller.rb"].collect do |path|
-            namespaces << File.dirname(path).sub(/#{load_path}\/?/, '')
-          end
-        end
-
         namespaces.delete('')
         namespaces
       end
@@ -433,7 +394,7 @@ module ActionDispatch
           raise ActionController::RoutingError, "No route matches #{options.inspect}"
         end
 
-        uri, params = result
+        path, params = result
         params.each do |k, v|
           if v
             params[k] = v
@@ -442,16 +403,10 @@ module ActionDispatch
           end
         end
 
-        uri << "?#{params.to_query}" if uri && params.any?
-        path = uri
-
         if path && method == :generate_extras
-          uri = URI(path)
-          extras = uri.query ?
-            Rack::Utils.parse_nested_query(uri.query).keys.map { |k| k.to_sym } :
-            []
-          [uri.path, extras]
+          [path, params.keys]
         elsif path
+          path << "?#{params.to_query}" if params.any?
           path
         else
           raise ActionController::RoutingError, "No route matches #{options.inspect}"
@@ -462,37 +417,11 @@ module ActionDispatch
 
       def call(env)
         @set.call(env)
-      rescue ActionController::RoutingError => e
-        raise e if env['action_controller.rescue_error'] == false
-
-        method, path = env['REQUEST_METHOD'].downcase.to_sym, env['PATH_INFO']
-
-        # Route was not recognized. Try to find out why (maybe wrong verb).
-        allows = HTTP_METHODS.select { |verb|
-          begin
-            recognize_path(path, {:method => verb}, false)
-          rescue ActionController::RoutingError
-            nil
-          end
-        }
-
-        if !HTTP_METHODS.include?(method)
-          raise ActionController::NotImplemented.new(*allows)
-        elsif !allows.empty?
-          raise ActionController::MethodNotAllowed.new(*allows)
-        else
-          raise e
-        end
       end
 
-      def recognize(request)
-        params = recognize_path(request.path, extract_request_environment(request))
-        request.path_parameters = params.with_indifferent_access
-        "#{params[:controller].to_s.camelize}Controller".constantize
-      end
-
-      def recognize_path(path, environment = {}, rescue_error = true)
+      def recognize_path(path, environment = {})
         method = (environment[:method] || "GET").to_s.upcase
+        path = Rack::Mount::Utils.normalize_path(path)
 
         begin
           env = Rack::MockRequest.env_for(path, {:method => method})
@@ -500,16 +429,16 @@ module ActionDispatch
           raise ActionController::RoutingError, e.message
         end
 
-        env['action_controller.recognize'] = true
-        env['action_controller.rescue_error'] = rescue_error
-        status, headers, body = call(env)
-        body
-      end
+        req = Rack::Request.new(env)
+        @set.recognize(req) do |route, matches, params|
+          dispatcher = route.app
+          if dispatcher.is_a?(Dispatcher) && dispatcher.controller(params, false)
+            dispatcher.prepare_params!(params)
+            return params
+          end
+        end
 
-      # Subclasses and plugins may override this method to extract further attributes
-      # from the request, for use by route conditions and such.
-      def extract_request_environment(request)
-        { :method => request.method }
+        raise ActionController::RoutingError, "No route matches #{path.inspect}"
       end
     end
   end

@@ -107,7 +107,7 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
       # Ruby 1.9 only supports basic whitespace
       @whitespace = "\n\t ".force_encoding(Encoding::UTF_8)
     end
-    
+
     @byte_order_mark = [65279].pack('U')
   end
 
@@ -504,7 +504,7 @@ class MultibyteCharsExtrasTest < Test::Unit::TestCase
   def test_limit_should_work_on_a_multibyte_string
     example = chars(UNICODE_STRING)
     bytesize = UNICODE_STRING.respond_to?(:bytesize) ? UNICODE_STRING.bytesize : UNICODE_STRING.size
-    
+
     assert_equal UNICODE_STRING, example.limit(bytesize)
     assert_equal '', example.limit(0)
     assert_equal '', example.limit(1)
@@ -531,7 +531,7 @@ class MultibyteCharsExtrasTest < Test::Unit::TestCase
       assert example.limit(limit).to_s.length <= limit
     end
   end
-  
+
   def test_composition_exclusion_is_set_up_properly
     # Normalization of DEVANAGARI LETTER QA breaks when composition exclusion isn't used correctly
     qa = [0x915, 0x93c].pack('U*')

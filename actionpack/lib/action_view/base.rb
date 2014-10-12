@@ -1,20 +1,26 @@
 require 'active_support/core_ext/module/attr_internal'
 require 'active_support/core_ext/module/delegation'
+require 'active_support/core_ext/class/attribute'
 
 module ActionView #:nodoc:
   class ActionViewError < StandardError #:nodoc:
   end
 
   class MissingTemplate < ActionViewError #:nodoc:
-    attr_reader :path, :action_name
+    attr_reader :path
 
-    def initialize(paths, path, template_format = nil)
+    def initialize(paths, path, details, partial)
       @path = path
-      @action_name = path.split("/").last.split(".")[0...-1].join(".")
-      full_template_path = path.include?('.') ? path : "#{path}.erb"
-      display_paths = paths.compact.join(":")
-      template_type = (path =~ /layouts/i) ? 'layout' : 'template'
-      super("Missing #{template_type} #{full_template_path} in view path #{display_paths}")
+      display_paths = paths.compact.map{ |p| p.to_s.inspect }.join(", ")
+      template_type = if partial
+        "partial"
+      elsif path =~ /layouts/i
+        'layout'
+      else
+        'template'
+      end
+
+      super("Missing #{template_type} #{path} with #{details.inspect} in view paths #{display_paths}")
     end
   end
 
@@ -181,7 +187,6 @@ module ActionView #:nodoc:
     extend ActiveSupport::Memoizable
 
     attr_accessor :base_path, :assigns, :template_extension, :formats
-    attr_accessor :controller
     attr_internal :captures
 
     def reset_formats(formats)
@@ -240,7 +245,7 @@ module ActionView #:nodoc:
       ActionView::PathSet.new(Array(value))
     end
 
-    extlib_inheritable_accessor :helpers
+    class_attribute :helpers
     attr_reader :helpers
 
     def self.for_controller(controller)
@@ -274,15 +279,18 @@ module ActionView #:nodoc:
     end
 
     def initialize(view_paths = [], assigns_for_first_render = {}, controller = nil, formats = nil)#:nodoc:
+      @config = nil
       @formats = formats
       @assigns = assigns_for_first_render.each { |key, value| instance_variable_set("@#{key}", value) }
-      @controller = controller
       @helpers = self.class.helpers || Module.new
-      @_content_for = Hash.new {|h,k| h[k] = ActionView::SafeBuffer.new }
+
+      @_controller   = controller
+      @_content_for  = Hash.new {|h,k| h[k] = ActiveSupport::SafeBuffer.new }
+      @_virtual_path = nil
       self.view_paths = view_paths
     end
 
-    attr_internal :template
+    attr_internal :controller, :template
     attr_reader :view_paths
 
     def view_paths=(paths)
@@ -297,12 +305,11 @@ module ActionView #:nodoc:
 
     # Evaluates the local assigns and controller ivars, pushes them to the view.
     def _evaluate_assigns_and_ivars #:nodoc:
-      if @controller
-        variables = @controller.instance_variable_names
-        variables -= @controller.protected_instance_variables if @controller.respond_to?(:protected_instance_variables)
-        variables.each { |name| instance_variable_set(name, @controller.instance_variable_get(name)) }
+      if controller
+        variables = controller.instance_variable_names
+        variables -= controller.protected_instance_variables if controller.respond_to?(:protected_instance_variables)
+        variables.each { |name| instance_variable_set(name, controller.instance_variable_get(name)) }
       end
     end
-
   end
 end

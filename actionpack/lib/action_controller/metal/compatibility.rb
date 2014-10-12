@@ -2,6 +2,8 @@ module ActionController
   module Compatibility
     extend ActiveSupport::Concern
 
+    include AbstractController::Compatibility
+
     class ::ActionController::ActionControllerError < StandardError #:nodoc:
     end
 
@@ -13,14 +15,13 @@ module ActionController
       cattr_accessor :session_options
       self.session_options = {}
 
-      cattr_accessor :allow_concurrency
-      self.allow_concurrency = false
-
       cattr_accessor :relative_url_root
       self.relative_url_root = ENV['RAILS_RELATIVE_URL_ROOT']
 
       class << self
         delegate :default_charset=, :to => "ActionDispatch::Response"
+        delegate :resources_path_names, :to => "ActionDispatch::Routing::Routes"
+        delegate :resources_path_names=, :to => "ActionDispatch::Routing::Routes"
       end
 
       # cattr_reader :protected_instance_variables
@@ -29,15 +30,7 @@ module ActionController
                                              @variables_added @request_origin @url
                                              @parent_controller @action_name
                                              @before_filter_chain_aborted @_headers @_params
-                                             @_flash @_response)
-
-      # Indicates whether or not optimise the generated named
-      # route helper methods
-      cattr_accessor :optimise_named_routes
-      self.optimise_named_routes = true
-
-      cattr_accessor :resources_path_names
-      self.resources_path_names = { :new => 'new', :edit => 'edit' }
+                                             @_response)
 
       # Controls the resource action separator
       cattr_accessor :resource_action_separator
@@ -47,9 +40,6 @@ module ActionController
       self.use_accept_header = true
 
       self.page_cache_directory = defined?(Rails.public_path) ? Rails.public_path : ""
-
-      cattr_accessor :consider_all_requests_local
-      self.consider_all_requests_local = true
 
       # Prepends all the URL-generating helpers from AssetHelper. This makes it possible to easily move javascripts, stylesheets,
       # and images to a dedicated asset server away from the main web server. Example:
@@ -78,6 +68,27 @@ module ActionController
 
     module ClassMethods
       def consider_all_requests_local
+        ActiveSupport::Deprecation.warn "ActionController::Base.consider_all_requests_local is deprecated, " <<
+          "use Rails.application.config.consider_all_requests_local instead"
+        Rails.application.config.consider_all_requests_local
+      end
+
+      def consider_all_requests_local=(value)
+        ActiveSupport::Deprecation.warn "ActionController::Base.consider_all_requests_local= is no longer effective. " <<
+          "Please configure it on your application with config.consider_all_requests_local="
+        Rails.application.config.consider_all_requests_local = value
+      end
+
+      def allow_concurrency
+        ActiveSupport::Deprecation.warn "ActionController::Base.allow_concurrency is deprecated, " <<
+          "use Rails.application.config.allow_concurrency instead"
+        Rails.application.config.allow_concurrency
+      end
+
+      def allow_concurrency=(value)
+        ActiveSupport::Deprecation.warn "ActionController::Base.allow_concurrency= is no longer effective. " <<
+          "Please configure it on your application with config.allow_concurrency="
+        Rails.application.config.allow_concurrency = value
       end
 
       def rescue_action(env)
@@ -89,6 +100,9 @@ module ActionController
         @@cache_store = ActiveSupport::Cache.lookup_store(store_option)
       end
     end
+
+    delegate :consider_all_requests_local, :consider_all_requests_local=,
+             :allow_concurrency, :allow_concurrency=, :to => :"self.class"
 
     def render_to_body(options)
       if options.is_a?(Hash) && options.key?(:template)
@@ -107,19 +121,6 @@ module ActionController
 
     def method_for_action(action_name)
       super || (respond_to?(:method_missing) && "_handle_method_missing")
-    end
-
-    def _find_layout(name, details)
-      details[:prefix] = nil if name =~ /\blayouts/
-      super
-    end
-
-    # Move this into a "don't run in production" module
-    def _default_layout(details, require_layout = false)
-      super
-    rescue ActionView::MissingTemplate
-      _find_layout(_layout({}), {})
-      nil
     end
 
     def performed?

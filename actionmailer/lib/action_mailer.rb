@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2004-2009 David Heinemeier Hansson
+# Copyright (c) 2004-2010 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,37 +21,37 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-actionpack_path = "#{File.dirname(__FILE__)}/../../actionpack/lib"
-$:.unshift(actionpack_path) if File.directory?(actionpack_path)
-require 'action_controller'
+actionpack_path = File.expand_path('../../../actionpack/lib', __FILE__)
+$:.unshift(actionpack_path) if File.directory?(actionpack_path) && !$:.include?(actionpack_path)
+
+require 'abstract_controller'
 require 'action_view'
+
+# Common ActiveSupport usage in ActionMailer
+require 'active_support/core_ext/class'
+require 'active_support/core_ext/object/blank'
+require 'active_support/core_ext/array/uniq_by'
+require 'active_support/core_ext/module/attr_internal'
+require 'active_support/core_ext/module/delegation'
+require 'active_support/core_ext/string/inflections'
 
 module ActionMailer
   extend ::ActiveSupport::Autoload
 
   autoload :AdvAttrAccessor
-  autoload :DeprecatedBody
+  autoload :Collector
   autoload :Base
-  autoload :DeliveryMethod
+  autoload :DeliveryMethods
+  autoload :DeprecatedApi
   autoload :MailHelper
-  autoload :Part
-  autoload :PartContainer
+  autoload :OldApi
   autoload :Quoting
+  autoload :TestCase
   autoload :TestHelper
-  autoload :Utils
 end
 
 module Text
   extend ActiveSupport::Autoload
 
-  autoload :Format, 'action_mailer/vendor/text_format'
+  autoload :Format, 'text/format'
 end
-
-module Net
-  extend ActiveSupport::Autoload
-
-  autoload :SMTP
-end
-
-
-require 'action_mailer/vendor/tmail'

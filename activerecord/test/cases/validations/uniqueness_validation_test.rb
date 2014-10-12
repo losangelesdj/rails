@@ -5,7 +5,6 @@ require 'models/reply'
 require 'models/warehouse_thing'
 require 'models/guid'
 require 'models/event'
-require 'models/developer'
 
 # The following methods in Topic are used in test_conditional_validation_*
 class Topic
@@ -39,7 +38,7 @@ end
 class UniquenessValidationTest < ActiveRecord::TestCase
   fixtures :topics, 'warehouse-things', :developers
 
-  repair_validations(Topic)
+  repair_validations(Topic, Reply)
 
   def test_validate_uniqueness
     Topic.validates_uniqueness_of(:title)
@@ -59,6 +58,15 @@ class UniquenessValidationTest < ActiveRecord::TestCase
     assert t2.save, "Should now save t2 as unique"
   end
 
+  def test_validates_uniqueness_with_validates
+    Topic.validates :title, :uniqueness => true
+    t = Topic.create!('title' => 'abc')
+
+    t2 = Topic.new('title' => 'abc')
+    assert !t2.valid?
+    assert t2.errors[:title]
+  end
+
   def test_validates_uniqueness_with_newline_chars
     Topic.validates_uniqueness_of(:title, :case_sensitive => false)
 
@@ -67,24 +75,22 @@ class UniquenessValidationTest < ActiveRecord::TestCase
   end
 
   def test_validate_uniqueness_with_scope
-    repair_validations(Reply) do
-      Reply.validates_uniqueness_of(:content, :scope => "parent_id")
+    Reply.validates_uniqueness_of(:content, :scope => "parent_id")
 
-      t = Topic.create("title" => "I'm unique!")
+    t = Topic.create("title" => "I'm unique!")
 
-      r1 = t.replies.create "title" => "r1", "content" => "hello world"
-      assert r1.valid?, "Saving r1"
+    r1 = t.replies.create "title" => "r1", "content" => "hello world"
+    assert r1.valid?, "Saving r1"
 
-      r2 = t.replies.create "title" => "r2", "content" => "hello world"
-      assert !r2.valid?, "Saving r2 first time"
+    r2 = t.replies.create "title" => "r2", "content" => "hello world"
+    assert !r2.valid?, "Saving r2 first time"
 
-      r2.content = "something else"
-      assert r2.save, "Saving r2 second time"
+    r2.content = "something else"
+    assert r2.save, "Saving r2 second time"
 
-      t2 = Topic.create("title" => "I'm unique too!")
-      r3 = t2.replies.create "title" => "r3", "content" => "hello world"
-      assert r3.valid?, "Saving r3"
-    end
+    t2 = Topic.create("title" => "I'm unique too!")
+    r3 = t2.replies.create "title" => "r3", "content" => "hello world"
+    assert r3.valid?, "Saving r3"
   end
 
   def test_validate_uniqueness_scoped_to_defining_class
@@ -103,29 +109,27 @@ class UniquenessValidationTest < ActiveRecord::TestCase
   end
 
   def test_validate_uniqueness_with_scope_array
-    repair_validations(Reply) do
-      Reply.validates_uniqueness_of(:author_name, :scope => [:author_email_address, :parent_id])
+    Reply.validates_uniqueness_of(:author_name, :scope => [:author_email_address, :parent_id])
 
-      t = Topic.create("title" => "The earth is actually flat!")
+    t = Topic.create("title" => "The earth is actually flat!")
 
-      r1 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy@rubyonrails.com", "title" => "You're crazy!", "content" => "Crazy reply"
-      assert r1.valid?, "Saving r1"
+    r1 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy@rubyonrails.com", "title" => "You're crazy!", "content" => "Crazy reply"
+    assert r1.valid?, "Saving r1"
 
-      r2 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy@rubyonrails.com", "title" => "You're crazy!", "content" => "Crazy reply again..."
-      assert !r2.valid?, "Saving r2. Double reply by same author."
+    r2 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy@rubyonrails.com", "title" => "You're crazy!", "content" => "Crazy reply again..."
+    assert !r2.valid?, "Saving r2. Double reply by same author."
 
-      r2.author_email_address = "jeremy_alt_email@rubyonrails.com"
-      assert r2.save, "Saving r2 the second time."
+    r2.author_email_address = "jeremy_alt_email@rubyonrails.com"
+    assert r2.save, "Saving r2 the second time."
 
-      r3 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy_alt_email@rubyonrails.com", "title" => "You're wrong", "content" => "It's cubic"
-      assert !r3.valid?, "Saving r3"
+    r3 = t.replies.create "author_name" => "jeremy", "author_email_address" => "jeremy_alt_email@rubyonrails.com", "title" => "You're wrong", "content" => "It's cubic"
+    assert !r3.valid?, "Saving r3"
 
-      r3.author_name = "jj"
-      assert r3.save, "Saving r3 the second time."
+    r3.author_name = "jj"
+    assert r3.save, "Saving r3 the second time."
 
-      r3.author_name = "jeremy"
-      assert !r3.save, "Saving r3 the third time."
-    end
+    r3.author_name = "jeremy"
+    assert !r3.save, "Saving r3 the third time."
   end
 
   def test_validate_case_insensitive_uniqueness
@@ -213,7 +217,7 @@ class UniquenessValidationTest < ActiveRecord::TestCase
   def test_validates_uniqueness_inside_with_scope
     Topic.validates_uniqueness_of(:title)
 
-    Topic.with_scope(:find => { :conditions => { :author_name => "David" } }) do
+    Topic.send(:with_scope, :find => { :conditions => { :author_name => "David" } }) do
       t1 = Topic.new("title" => "I'm unique!", "author_name" => "Mary")
       assert t1.save
       t2 = Topic.new("title" => "I'm unique!", "author_name" => "David")
@@ -275,15 +279,5 @@ class UniquenessValidationTest < ActiveRecord::TestCase
     assert !w6.valid?, "w6 shouldn't be valid"
     assert w6.errors[:city].any?, "Should have errors for city"
     assert_equal ["has already been taken"], w6.errors[:city], "Should have uniqueness message for city"
-  end
-
-  def test_validates_uniqueness_of_with_custom_message_using_quotes
-    repair_validations(Developer) do
-      Developer.validates_uniqueness_of :name, :message=> "This string contains 'single' and \"double\" quotes"
-      d = Developer.new
-      d.name = "David"
-      assert !d.valid?
-      assert_equal ["This string contains 'single' and \"double\" quotes"], d.errors[:name]
-    end
   end
 end

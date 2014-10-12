@@ -56,8 +56,11 @@ class TimeWithZoneTest < Test::Unit::TestCase
     assert_equal 'EDT', ActiveSupport::TimeWithZone.new(Time.utc(2000, 6), @time_zone).zone #dst
   end
 
-  def test_to_json
+  def test_to_json_with_use_standard_json_time_format_config_set_to_false
+    old, ActiveSupport.use_standard_json_time_format = ActiveSupport.use_standard_json_time_format, false
     assert_equal "\"1999/12/31 19:00:00 -0500\"", ActiveSupport::JSON.encode(@twz)
+  ensure
+    ActiveSupport.use_standard_json_time_format = old
   end
 
   def test_to_json_with_use_standard_json_time_format_config_set_to_true
@@ -285,6 +288,12 @@ class TimeWithZoneTest < Test::Unit::TestCase
     assert result.is_a?(Integer)
   end
 
+  def test_to_i_with_wrapped_datetime
+    datetime = DateTime.civil(2000, 1, 1, 0)
+    twz = ActiveSupport::TimeWithZone.new(datetime, @time_zone)
+    assert_equal 946684800, twz.to_i
+  end
+
   def test_to_time
     assert_equal @twz, @twz.to_time
   end
@@ -319,7 +328,7 @@ class TimeWithZoneTest < Test::Unit::TestCase
     assert @twz.kind_of?(Time)
     assert @twz.is_a?(ActiveSupport::TimeWithZone)
   end
-  
+
   def test_class_name
     assert_equal 'Time', ActiveSupport::TimeWithZone.name
   end
@@ -694,7 +703,7 @@ class TimeWithZoneTest < Test::Unit::TestCase
     assert_equal "Sun, 15 Jul 2007 10:30:00 EDT -04:00", twz.years_ago(1).inspect
     assert_equal "Sun, 15 Jul 2007 10:30:00 EDT -04:00", (twz - 1.year).inspect
   end
-  
+
   protected
     def with_env_tz(new_tz = 'US/Eastern')
       old_tz, ENV['TZ'] = ENV['TZ'], new_tz

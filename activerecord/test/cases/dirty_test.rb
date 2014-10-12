@@ -301,7 +301,7 @@ class DirtyTest < ActiveRecord::TestCase
   def test_save_should_not_save_serialized_attribute_with_partial_updates_if_not_present
     with_partial_updates(Topic) do
       Topic.create!(:author_name => 'Bill', :content => {:a => "a"})
-      topic = Topic.first(:select => 'id, author_name')
+      topic = Topic.select('id, author_name').first
       topic.update_attribute :author_name, 'John'
       topic = Topic.first
       assert_not_nil topic.content
@@ -311,11 +311,11 @@ class DirtyTest < ActiveRecord::TestCase
   def test_previous_changes
     # original values should be in previous_changes
     pirate = Pirate.new
-  
+
     assert_equal Hash.new, pirate.previous_changes
     pirate.catchphrase = "arrr"
     pirate.save!
-  
+
     assert_equal 4, pirate.previous_changes.size
     assert_equal [nil, "arrr"], pirate.previous_changes['catchphrase']
     assert_equal [nil, pirate.id], pirate.previous_changes['id']
@@ -324,21 +324,21 @@ class DirtyTest < ActiveRecord::TestCase
     assert_nil pirate.previous_changes['created_on'][0]
     assert_not_nil pirate.previous_changes['created_on'][1]
     assert !pirate.previous_changes.key?('parrot_id')
-  
+
     # original values should be in previous_changes
     pirate = Pirate.new
-  
+
     assert_equal Hash.new, pirate.previous_changes
     pirate.catchphrase = "arrr"
     pirate.save
-  
+
     assert_equal 4, pirate.previous_changes.size
     assert_equal [nil, "arrr"], pirate.previous_changes['catchphrase']
     assert_equal [nil, pirate.id], pirate.previous_changes['id']
     assert pirate.previous_changes.include?('updated_on')
     assert pirate.previous_changes.include?('created_on')
     assert !pirate.previous_changes.key?('parrot_id')
-  
+
     pirate.catchphrase = "Yar!!"
     pirate.reload
     assert_equal Hash.new, pirate.previous_changes
@@ -383,7 +383,7 @@ class DirtyTest < ActiveRecord::TestCase
     assert_not_nil pirate.previous_changes['updated_on'][0]
     assert_not_nil pirate.previous_changes['updated_on'][1]
     assert !pirate.previous_changes.key?('parrot_id')
-    assert !pirate.previous_changes.key?('created_on')    
+    assert !pirate.previous_changes.key?('created_on')
   end
 
   private

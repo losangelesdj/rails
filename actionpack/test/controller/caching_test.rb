@@ -611,7 +611,7 @@ class FragmentCachingTest < ActionController::TestCase
     @store.write('views/expensive', 'fragment content')
     fragment_computed = false
 
-    buffer = 'generated till now -> '
+    buffer = 'generated till now -> '.html_safe
     @controller.fragment_for(buffer, 'expensive') { fragment_computed = true }
 
     assert fragment_computed
@@ -622,25 +622,11 @@ class FragmentCachingTest < ActionController::TestCase
     @store.write('views/expensive', 'fragment content')
     fragment_computed = false
 
-    buffer = 'generated till now -> '
+    buffer = 'generated till now -> '.html_safe
     @controller.fragment_for(buffer, 'expensive') { fragment_computed = true }
 
     assert !fragment_computed
     assert_equal 'generated till now -> fragment content', buffer
-  end
-
-  def test_fragment_for_logging
-    fragment_computed = false
-    events = []
-    ActiveSupport::Notifications.subscribe { |*args| events << args }
-
-    buffer = 'generated till now -> '
-    @controller.fragment_for(buffer, 'expensive') { fragment_computed = true }
-
-    assert fragment_computed
-    assert_equal 'generated till now -> ', buffer
-    ActiveSupport::Notifications.notifier.wait
-    assert_equal [:fragment_exist?, :write_fragment], events.map(&:first)
   end
 
 end

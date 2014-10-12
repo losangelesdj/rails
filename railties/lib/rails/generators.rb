@@ -1,15 +1,14 @@
-activesupport_path = "#{File.dirname(__FILE__)}/../../../activesupport/lib"
-$LOAD_PATH.unshift(activesupport_path) if File.directory?(activesupport_path)
+activesupport_path = File.expand_path('../../../../activesupport/lib', __FILE__)
+$:.unshift(activesupport_path) if File.directory?(activesupport_path) && !$:.include?(activesupport_path)
+
 require 'active_support'
 require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/object/metaclass'
-require 'active_support/core_ext/array'
-require 'active_support/core_ext/hash'
+require 'active_support/core_ext/array/extract_options'
+require 'active_support/core_ext/hash/deep_merge'
 require 'active_support/core_ext/module/attribute_accessors'
 require 'active_support/core_ext/string/inflections'
 
-# TODO: Do not always push on vendored thor
-$LOAD_PATH.unshift("#{File.dirname(__FILE__)}/vendor/thor-0.12.1/lib")
 require 'rails/generators/base'
 require 'rails/generators/named_base'
 
@@ -37,11 +36,6 @@ module Rails
     }
 
     DEFAULT_OPTIONS = {
-      :active_record => {
-        :migration  => true,
-        :timestamps => true
-      },
-
       :erb => {
         :layout => true
       },
@@ -50,20 +44,15 @@ module Rails
         :force_plural => false,
         :helper => true,
         :layout => true,
-        :orm => :active_record,
-        :integration_tool => :test_unit,
-        :performance_tool => :test_unit,
+        :orm => nil,
+        :integration_tool => nil,
+        :performance_tool => nil,
         :resource_controller => :controller,
         :scaffold_controller => :scaffold_controller,
         :singleton => false,
         :stylesheets => true,
-        :template_engine => :erb,
-        :test_framework => :test_unit
-      },
-
-      :test_unit => {
-        :fixture => true,
-        :fixture_replacement => nil
+        :test_framework => nil,
+        :template_engine => :erb
       },
 
       :plugin => {
@@ -76,6 +65,12 @@ module Rails
       no_color! unless config.colorize_logging
       aliases.deep_merge! config.aliases
       options.deep_merge! config.options
+      fallbacks.merge! config.fallbacks
+      templates_path.concat config.templates
+    end
+
+    def self.templates_path
+      @templates_path ||= []
     end
 
     def self.aliases #:nodoc:
@@ -84,18 +79,6 @@ module Rails
 
     def self.options #:nodoc:
       @options ||= DEFAULT_OPTIONS.dup
-    end
-
-    def self.gems_generators_paths #:nodoc:
-      return [] unless defined?(Gem) && Gem.respond_to?(:loaded_specs)
-      Gem.loaded_specs.inject([]) do |paths, (name, spec)|
-        paths += Dir[File.join(spec.full_gem_path, "lib/{generators,rails_generators}")]
-      end
-    end
-
-    def self.plugins_generators_paths #:nodoc:
-      return [] unless Rails.root
-      Dir[File.join(Rails.root, "vendor", "plugins", "*", "lib", "{generators,rails_generators}")]
     end
 
     # Hold configured generators fallbacks. If a plugin developer wants a
@@ -116,48 +99,19 @@ module Rails
     end
 
     # Remove the color from output.
-    #
     def self.no_color!
       Thor::Base.shell = Thor::Shell::Basic
     end
 
-    # Generators load paths used on lookup. The lookup happens as:
-    #
-    #   1) lib generators
-    #   2) vendor/plugin generators
-    #   3) vendor/gems generators
-    #   4) ~/rails/generators
-    #   5) rubygems generators
-    #   6) builtin generators
-    #
-    # TODO Remove hardcoded paths for all, except (6).
-    #
-    def self.load_paths
-      @load_paths ||= begin
-        paths = []
-        paths += Dir[File.join(Rails.root, "lib", "{generators,rails_generators}")] if Rails.root
-        paths += Dir[File.join(Thor::Util.user_home, ".rails", "{generators,rails_generators}")]
-        paths += self.plugins_generators_paths
-        paths += self.gems_generators_paths
-        paths << File.expand_path(File.join(File.dirname(__FILE__), "generators"))
-        paths.uniq!
-        paths
-      end
+    # Track all generators subclasses.
+    def self.subclasses
+      @subclasses ||= []
     end
-    load_paths # Cache load paths. Needed to avoid __FILE__ pointing to wrong paths.
 
-    # Rails finds namespaces exactly as thor, with three conveniences:
+    # Rails finds namespaces similar to thor, it only adds one rule:
     #
-    #  1) If your generator name ends with generator, as WebratGenerator, it sets
-    #     its namespace to "webrat", so it can be invoked as "webrat" and not
-    #     "webrat_generator";
-    #
-    #  2) If your generator has a generators namespace, as Rails::Generators::WebratGenerator,
-    #     the namespace is set to "rails:generators:webrat", but Rails allows it
-    #     to be invoked simply as "rails:webrat". The "generators" is added
-    #     automatically when doing the lookup;
-    #
-    #  3) Rails looks in load paths and loads the generator just before it's going to be used.
+    # Generators names must end with "_generator.rb". This is required because Rails
+    # looks in load paths and loads the generator just before it's going to be used.
     #
     # ==== Examples
     #
@@ -165,36 +119,33 @@ module Rails
     #
     # Will search for the following generators:
     #
-    #   "rails:generators:webrat", "webrat:generators:integration", "webrat"
+    #   "rails:webrat", "webrat:integration", "webrat"
     #
-    # On the other hand, if "rails:webrat" is given, it will search for:
-    #
-    #   "rails:generators:webrat", "rails:webrat"
-    #
-    # Notice that the "generators" namespace is handled automatically by Rails,
-    # so you don't need to type it when you want to invoke a generator in specific.
+    # Notice that "rails:generators:webrat" could be loaded as well, what
+    # Rails looks for is the first and last parts of the namespace.
     #
     def self.find_by_namespace(name, base=nil, context=nil) #:nodoc:
-      name, attempts = name.to_s, [ ]
+      lookups = []
+      lookups << "#{base}:#{name}"    if base
+      lookups << "#{name}:#{context}" if context
 
-      case name.count(':')
-        when 1
-          base, name = name.split(':')
-          return find_by_namespace(name, base)
-        when 0
-          attempts += generator_names(base, name)    if base
-          attempts += generator_names(name, context) if context
+      unless base || context
+        unless name.to_s.include?(?:)
+          lookups << "#{name}:#{name}"
+          lookups << "rails:#{name}"
+        end
+        lookups << "#{name}"
       end
 
-      attempts << name
-      attempts += generator_names(name, name) unless name.include?(?:)
-      attempts.uniq!
+      lookup(lookups)
 
-      unloaded = attempts - namespaces
-      lookup(unloaded)
+      namespaces = subclasses.inject({}) do |hash, klass|
+        hash[klass.namespace] = klass
+        hash
+      end
 
-      attempts.each do |namespace|
-        klass = Thor::Util.find_by_namespace(namespace)
+      lookups.each do |namespace|
+        klass = namespaces[namespace]
         return klass if klass
       end
 
@@ -204,74 +155,61 @@ module Rails
     # Receives a namespace, arguments and the behavior to invoke the generator.
     # It's used as the default entry point for generate, destroy and update
     # commands.
-    #
     def self.invoke(namespace, args=ARGV, config={})
-      if klass = find_by_namespace(namespace, "rails")
-        args << "--help" if klass.arguments.any? { |a| a.required? } && args.empty?
-        klass.start args, config
+      names = namespace.to_s.split(':')
+      if klass = find_by_namespace(names.pop, names.shift)
+        args << "--help" if args.empty? && klass.arguments.any? { |a| a.required? }
+        klass.start(args, config)
       else
         puts "Could not find generator #{namespace}."
       end
     end
 
     # Show help message with available generators.
-    #
-    def self.help
-      rails = Rails::Generators.builtin.map do |group, name|
-        name if group == "rails"
-      end
-      rails.compact!
-      rails.sort!
+    def self.help(command = 'generate')
+      lookup!
 
-      puts "Please select a generator."
-      puts "Builtin: #{rails.join(', ')}."
+      namespaces = subclasses.map{ |k| k.namespace }
+      namespaces.sort!
 
-      # Load paths and remove builtin
-      paths, others = load_paths.dup, []
-      paths.pop
-
-      paths.each do |path|
-        tail = [ "*", "*", "*_generator.rb" ]
-
-        until tail.empty?
-          others += Dir[File.join(path, *tail)].collect do |file|
-            name = file.split('/')[-tail.size, 2]
-            name.last.sub!(/_generator\.rb$/, '')
-            name.uniq!
-            name.join(':')
-          end
-          tail.shift
-        end
+      groups = Hash.new { |h,k| h[k] = [] }
+      namespaces.each do |namespace|
+        base = namespace.split(':').first
+        groups[base] << namespace
       end
 
-      others.sort!
-      puts "Others: #{others.join(', ')}." unless others.empty?
+      puts "Usage: rails #{command} GENERATOR [args] [options]"
+      puts
+      puts "General options:"
+      puts "  -h, [--help]     # Print generators options and usage"
+      puts "  -p, [--pretend]  # Run but do not make any changes"
+      puts "  -f, [--force]    # Overwrite files that already exist"
+      puts "  -s, [--skip]     # Skip files that already exist"
+      puts "  -q, [--quiet]    # Supress status output"
+      puts
+      puts "Please choose a generator below."
+      puts
+
+      # Print Rails defaults first.
+      rails = groups.delete("rails")
+      rails.map! { |n| n.sub(/^rails:/, '') }
+      rails.delete("app")
+      print_list("rails", rails)
+
+      groups.sort.each { |b, n| print_list(b, n) }
     end
 
     protected
 
-      # Return all defined namespaces.
-      #
-      def self.namespaces #:nodoc:
-        Thor::Base.subclasses.map { |klass| klass.namespace }
+      # Prints a list of generators.
+      def self.print_list(base, namespaces) #:nodoc:
+        return if namespaces.empty?
+        puts "#{base.camelize}:"
+        namespaces.each { |namespace| puts("  #{namespace}") }
+        puts
       end
 
-      # Keep builtin generators in an Array[Array[group, name]].
-      #
-      def self.builtin #:nodoc:
-        Dir[File.dirname(__FILE__) + '/generators/*/*'].collect do |file|
-          file.split('/')[-2, 2]
-        end
-      end
-
-      # By default, Rails strips the generator namespace to make invocations
-      # easier. This method generaters the both possibilities names.
-      def self.generator_names(first, second) #:nodoc:
-        [ "#{first}:generators:#{second}", "#{first}:#{second}" ]
-      end
-
-      # Try callbacks for the given base.
-      #
+      # Try fallbacks for the given base.
       def self.invoke_fallbacks_for(name, base) #:nodoc:
         return nil unless base && fallbacks[base.to_sym]
         invoked_fallbacks = []
@@ -289,25 +227,68 @@ module Rails
 
       # Receives namespaces in an array and tries to find matching generators
       # in the load path.
-      #
-      def self.lookup(attempts) #:nodoc:
-        attempts = attempts.map { |a| "#{a.split(":").last}_generator" }.uniq
-        attempts = "{#{attempts.join(',')}}.rb"
+      def self.lookup(namespaces) #:nodoc:
+        load_generators_from_railties!
+        paths = namespaces_to_paths(namespaces)
 
-        self.load_paths.each do |path|
-          Dir[File.join(path, '**', attempts)].each do |file|
+        paths.each do |raw_path|
+          ["rails_generators", "generators"].each do |base|
+            path = "#{base}/#{raw_path}_generator"
+
             begin
-              require file
+              require path
+              return
+            rescue LoadError => e
+              raise unless e.message =~ /#{Regexp.escape(path)}$/
             rescue NameError => e
-              raise unless e.message =~ /Rails::Generator/
-              warn "[WARNING] Could not load generator at #{file.inspect} because it's a Rails 2.x generator, which is not supported anymore"
+              raise unless e.message =~ /Rails::Generator([\s(::)]|$)/
+              warn "[WARNING] Could not load generator #{path.inspect} because it's a Rails 2.x generator, which is not supported anymore. Error: #{e.message}.\n#{e.backtrace.join("\n")}"
             rescue Exception => e
-              warn "[WARNING] Could not load generator at #{file.inspect}. Error: #{e.message}"
+              warn "[WARNING] Could not load generator #{path.inspect}. Error: #{e.message}.\n#{e.backtrace.join("\n")}"
             end
           end
         end
       end
 
+      # This will try to load any generator in the load path to show in help.
+      def self.lookup! #:nodoc:
+        load_generators_from_railties!
+
+        $LOAD_PATH.each do |base|
+          Dir[File.join(base, "{generators,rails_generators}", "**", "*_generator.rb")].each do |path|
+            begin
+              require path
+            rescue Exception => e
+              # No problem
+            end
+          end
+        end
+      end
+
+      # Allow generators to be loaded from custom paths.
+      def self.load_generators_from_railties! #:nodoc:
+        return if defined?(@generators_from_railties) || Rails.application.nil?
+        @generators_from_railties = true
+        Rails.application.load_generators
+      end
+
+      # Convert namespaces to paths by replacing ":" for "/" and adding
+      # an extra lookup. For example, "rails:model" should be searched
+      # in both: "rails/model/model_generator" and "rails/model_generator".
+      def self.namespaces_to_paths(namespaces) #:nodoc:
+        paths = []
+        namespaces.each do |namespace|
+          pieces = namespace.split(":")
+          paths << pieces.dup.push(pieces.last).join("/") unless pieces.uniq.size == 1
+          paths << pieces.join("/")
+        end
+        paths.uniq!
+        paths
+      end
+
   end
 end
 
+# If the application was already defined, configure generators,
+# otherwise you have to configure it by hand.
+Rails::Generators.configure! if Rails.respond_to?(:application) && Rails.application

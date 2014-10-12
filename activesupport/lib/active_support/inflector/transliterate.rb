@@ -5,7 +5,7 @@ require 'active_support/core_ext/string/multibyte'
 module ActiveSupport
   module Inflector
     extend self
-    
+
     # Replaces accented characters with their ascii equivalents.
     def transliterate(string)
       Iconv.iconv('ascii//ignore//translit', 'utf-8', string).to_s
@@ -56,6 +56,6 @@ module ActiveSupport
         parameterized_string.gsub!(/^#{re_sep}|#{re_sep}$/i, '')
       end
       parameterized_string.downcase
-    end    
+    end
   end
 end

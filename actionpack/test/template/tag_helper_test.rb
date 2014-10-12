@@ -37,6 +37,8 @@ class TagHelperTest < ActionView::TestCase
     assert content_tag("a", "Create", "href" => "create").html_safe?
     assert_equal content_tag("a", "Create", "href" => "create"),
                  content_tag("a", "Create", :href => "create")
+    assert_equal "<p>&lt;script&gt;evil_js&lt;/script&gt;</p>",
+                 content_tag(:p, '<script>evil_js</script>')
   end
 
   def test_content_tag_with_block_in_erb
@@ -88,17 +90,17 @@ class TagHelperTest < ActionView::TestCase
   def test_cdata_section
     assert_equal "<![CDATA[<hello world>]]>", cdata_section("<hello world>")
   end
-  
+
   def test_escape_once
     assert_equal '1 &lt; 2 &amp; 3', escape_once('1 < 2 &amp; 3')
   end
-  
+
   def test_double_escaping_attributes
     ['1&amp;2', '1 &lt; 2', '&#8220;test&#8220;'].each do |escaped|
       assert_equal %(<a href="#{escaped}" />), tag('a', :href => escaped)
     end
   end
-  
+
   def test_skip_invalid_escaped_attributes
     ['&1;', '&#1dfa3;', '& #123;'].each do |escaped|
       assert_equal %(<a href="#{escaped.gsub /&/, '&amp;'}" />), tag('a', :href => escaped)

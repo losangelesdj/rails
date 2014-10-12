@@ -55,14 +55,16 @@ module ActionDispatch
         when Class
           klass == middleware
         else
-          klass == ActiveSupport::Inflector.constantize(middleware.to_s)
+          if lazy_compare?(@klass) && lazy_compare?(middleware)
+            normalize(@klass) == normalize(middleware)
+          else
+            klass == ActiveSupport::Inflector.constantize(middleware.to_s)
+          end
         end
       end
 
       def inspect
-        str = klass.to_s
-        args.each { |arg| str += ", #{build_args.inspect}" }
-        str
+        klass.to_s
       end
 
       def build(app)
@@ -74,6 +76,14 @@ module ActionDispatch
       end
 
       private
+        def lazy_compare?(object)
+          object.is_a?(String) || object.is_a?(Symbol)
+        end
+
+        def normalize(object)
+          object.to_s.strip.sub(/^::/, '')
+        end
+
         def build_args
           Array(args).map { |arg| arg.respond_to?(:call) ? arg.call : arg }
         end
@@ -93,8 +103,9 @@ module ActionDispatch
     alias_method :insert_before, :insert
 
     def insert_after(index, *args, &block)
-      index = self.index(index) unless index.is_a?(Integer)
-      insert(index + 1, *args, &block)
+      i = index.is_a?(Integer) ? index : self.index(index)
+      raise "No such middleware to insert after: #{index.inspect}" unless i
+      insert(i + 1, *args, &block)
     end
 
     def swap(target, *args, &block)

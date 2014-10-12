@@ -1,16 +1,7 @@
-root = File.expand_path('../../../..', __FILE__)
-begin
-  require "#{root}/vendor/gems/environment"
-rescue LoadError
-  $:.unshift("#{root}/activesupport/lib")
-end
-
-lib = File.expand_path("#{File.dirname(__FILE__)}/../../lib")
-$:.unshift(lib) unless $:.include?('lib') || $:.include?(lib)
+require File.expand_path('../../../../load_paths', __FILE__)
 
 require 'config'
 require 'active_model'
-require 'active_model/test_case'
 
 # Show backtraces for deprecated behavior for quicker cleanup.
 ActiveSupport::Deprecation.debug = true

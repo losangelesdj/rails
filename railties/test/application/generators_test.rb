@@ -7,8 +7,6 @@ module ApplicationTests
     def setup
       build_app
       boot_rails
-      require "rails"
-      require "rails/generators"
     end
 
     def app_const
@@ -16,19 +14,28 @@ module ApplicationTests
     end
 
     def with_config
+      require "rails/all"
+      require "rails/generators"
+      yield app_const.config
+    end
+
+    def with_bare_config
+      require "rails"
+      require "rails/generators"
       yield app_const.config
     end
 
     test "generators default values" do
-      with_config do |c|
+      with_bare_config do |c|
         assert_equal(true, c.generators.colorize_logging)
         assert_equal({}, c.generators.aliases)
         assert_equal({}, c.generators.options)
+        assert_equal({}, c.generators.fallbacks)
       end
     end
 
     test "generators set rails options" do
-      with_config do |c|
+      with_bare_config do |c|
         c.generators.orm            = :datamapper
         c.generators.test_framework = :rspec
         c.generators.helper         = false
@@ -45,35 +52,40 @@ module ApplicationTests
       end
     end
 
-    test "generators aliases and options on initialization" do
-      application = with_config do |c|
-        c.frameworks = []
-        c.generators.rails :aliases => { :test_framework => "-w" }
-        c.generators.orm :datamapper
-        c.generators.test_framework :rspec
-      end
+    test "generators aliases, options, templates and fallbacks on initialization" do
+      add_to_config <<-RUBY
+        config.generators.rails :aliases => { :test_framework => "-w" }
+        config.generators.orm :datamapper
+        config.generators.test_framework :rspec
+        config.generators.fallbacks[:shoulda] = :test_unit
+        config.generators.templates << "some/where"
+      RUBY
+
       # Initialize the application
-      app_const.initialize!
-      Rails::Generators.configure!
+      require "#{app_path}/config/environment"
+      require "rails/generators"
 
       assert_equal :rspec, Rails::Generators.options[:rails][:test_framework]
       assert_equal "-w", Rails::Generators.aliases[:rails][:test_framework]
+      assert_equal Hash[:shoulda => :test_unit], Rails::Generators.fallbacks
+      assert_equal ["#{app_path}/lib/templates", "some/where"], Rails::Generators.templates_path
     end
 
     test "generators no color on initialization" do
-      with_config do |c|
-        c.frameworks = []
-        c.generators.colorize_logging = false
-      end
+      add_to_config <<-RUBY
+        config.generators.colorize_logging = false
+      RUBY
+
       # Initialize the application
-      app_const.initialize!
+      require "#{app_path}/config/environment"
+      require "rails/generators"
       Rails::Generators.configure!
 
       assert_equal Thor::Base.shell, Thor::Shell::Basic
     end
 
     test "generators with hashes for options and aliases" do
-      with_config do |c|
+      with_bare_config do |c|
         c.generators do |g|
           g.orm    :datamapper, :migration => false
           g.plugin :aliases => { :generator => "-g" },
@@ -89,19 +101,6 @@ module ApplicationTests
         assert_equal expected, c.generators.options
         assert_equal({ :plugin => { :generator => "-g" } }, c.generators.aliases)
       end
-    end
-
-    test "generators with hashes are deep merged" do
-      with_config do |c|
-        c.generators do |g|
-          g.orm    :datamapper, :migration => false
-          g.plugin :aliases => { :generator => "-g" },
-                   :generator => true
-        end
-      end
-
-      assert Rails::Generators.aliases.size >= 1
-      assert Rails::Generators.options.size >= 1
     end
   end
 end

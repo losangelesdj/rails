@@ -1,22 +1,11 @@
-root = File.expand_path('../../../..', __FILE__)
-begin
-  require "#{root}/vendor/gems/environment"
-rescue LoadError
-  $:.unshift("#{root}/activesupport/lib")
-end
-
-lib = File.expand_path("#{File.dirname(__FILE__)}/../../lib")
-$:.unshift(lib) unless $:.include?('lib') || $:.include?(lib)
+require File.expand_path('../../../../load_paths', __FILE__)
 
 require 'config'
 
-require 'rubygems'
 require 'test/unit'
 require 'stringio'
 
 require 'active_record'
-require 'active_record/test_case'
-require 'active_record/fixtures'
 require 'connection'
 
 begin
@@ -49,11 +38,6 @@ ActiveRecord::Base.connection.class.class_eval do
   alias_method_chain :execute, :query_record
 end
 
-# Make with_scope public for tests
-class << ActiveRecord::Base
-  public :with_scope, :with_exclusive_scope
-end
-
 unless ENV['FIXTURE_DEBUG']
   module ActiveRecord::TestFixtures::ClassMethods
     def try_to_load_dependency_with_silence(*args)
@@ -64,9 +48,10 @@ unless ENV['FIXTURE_DEBUG']
   end
 end
 
+require "cases/validations_repair_helper"
 class ActiveSupport::TestCase
   include ActiveRecord::TestFixtures
-  include ActiveModel::ValidationsRepairHelper
+  include ActiveRecord::ValidationsRepairHelper
 
   self.fixture_path = FIXTURES_ROOT
   self.use_instantiated_fixtures  = false

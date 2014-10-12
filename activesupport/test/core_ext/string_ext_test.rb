@@ -118,14 +118,14 @@ class StringInflectionsTest < Test::Unit::TestCase
     assert_equal DateTime.civil(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_time
     assert_equal Time.local_time(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_time(:local)
   end
-  
+
   def test_string_to_datetime
     assert_equal DateTime.civil(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_datetime
     assert_equal 0, "2039-02-27 23:50".to_datetime.offset # use UTC offset
     assert_equal ::Date::ITALY, "2039-02-27 23:50".to_datetime.start # use Ruby's default start value
     assert_equal DateTime.civil(2039, 2, 27, 23, 50, 19 + Rational(275038, 1000000), "-04:00"), "2039-02-27T23:50:19.275038-04:00".to_datetime
   end
-  
+
   def test_string_to_date
     assert_equal Date.new(2005, 2, 27), "2005-02-27".to_date
   end
@@ -267,7 +267,7 @@ end
   string.rb - Interpolation for String.
 
   Copyright (C) 2005-2009 Masao Mutoh
- 
+
   You may redistribute it and/or modify it under the same
   license terms as Ruby.
 =end
@@ -335,6 +335,11 @@ end
 class OutputSafetyTest < ActiveSupport::TestCase
   def setup
     @string = "hello"
+    @object = Class.new(Object) do
+      def to_s
+        "other"
+      end
+    end.new
   end
 
   test "A string is unsafe by default" do
@@ -342,78 +347,108 @@ class OutputSafetyTest < ActiveSupport::TestCase
   end
 
   test "A string can be marked safe" do
-    @string.html_safe!
-    assert @string.html_safe?
+    string = @string.html_safe
+    assert string.html_safe?
   end
 
   test "Marking a string safe returns the string" do
-    assert_equal @string, @string.html_safe!
+    assert_equal @string, @string.html_safe
+  end
+
+  test "A fixnum is safe by default" do
+    assert 5.html_safe?
+  end
+
+  test "An object is unsafe by default" do
+    assert !@object.html_safe?
+  end
+
+  test "Adding an object to a safe string returns a safe string" do
+    string = @string.html_safe
+    string << @object
+
+    assert_equal "helloother", string
+    assert string.html_safe?
   end
 
   test "Adding a safe string to another safe string returns a safe string" do
-    @other_string = "other".html_safe!
-    @string.html_safe!
-    @combination = @other_string + @string
+    @other_string = "other".html_safe
+    string = @string.html_safe
+    @combination = @other_string + string
 
     assert_equal "otherhello", @combination
     assert @combination.html_safe?
   end
 
-  test "Adding an unsafe string to a safe string returns an unsafe string" do
-    @other_string = "other".html_safe!
-    @combination = @other_string + @string
-    @other_combination = @string + @other_string
+  test "Adding an unsafe string to a safe string escapes it and returns a safe string" do
+    @other_string = "other".html_safe
+    @combination = @other_string + "<foo>"
+    @other_combination = @string + "<foo>"
 
-    assert_equal "otherhello", @combination
-    assert_equal "helloother", @other_combination
+    assert_equal "other&lt;foo&gt;", @combination
+    assert_equal "hello<foo>", @other_combination
 
-    assert !@combination.html_safe?
+    assert @combination.html_safe?
     assert !@other_combination.html_safe?
   end
 
   test "Concatting safe onto unsafe yields unsafe" do
     @other_string = "other"
-    @string.html_safe!
 
-    @other_string.concat(@string)
+    string = @string.html_safe
+    @other_string.concat(string)
     assert !@other_string.html_safe?
   end
 
-  test "Concatting unsafe onto safe yields unsafe" do
-    @other_string = "other".html_safe!
-
-    @other_string.concat(@string)
-    assert !@other_string.html_safe?
+  test "Concatting unsafe onto safe yields escaped safe" do
+    @other_string = "other".html_safe
+    string = @other_string.concat("<foo>")
+    assert_equal "other&lt;foo&gt;", string
+    assert string.html_safe?
   end
 
   test "Concatting safe onto safe yields safe" do
-    @other_string = "other".html_safe!
-    @string.html_safe!
+    @other_string = "other".html_safe
+    string = @string.html_safe
 
-    @other_string.concat(@string)
+    @other_string.concat(string)
     assert @other_string.html_safe?
   end
 
   test "Concatting safe onto unsafe with << yields unsafe" do
     @other_string = "other"
-    @string.html_safe!
+    string = @string.html_safe
 
-    @other_string << @string
+    @other_string << string
     assert !@other_string.html_safe?
   end
 
-  test "Concatting unsafe onto safe with << yields unsafe" do
-    @other_string = "other".html_safe!
-
-    @other_string << @string
-    assert !@other_string.html_safe?
+  test "Concatting unsafe onto safe with << yields escaped safe" do
+    @other_string = "other".html_safe
+    string = @other_string << "<foo>"
+    assert_equal "other&lt;foo&gt;", string
+    assert string.html_safe?
   end
 
   test "Concatting safe onto safe with << yields safe" do
-    @other_string = "other".html_safe!
-    @string.html_safe!
+    @other_string = "other".html_safe
+    string = @string.html_safe
 
-    @other_string << @string
+    @other_string << string
     assert @other_string.html_safe?
+  end
+
+  test "Concatting a fixnum to safe always yields safe" do
+    string = @string.html_safe
+    string = string.concat(13)
+    assert_equal "hello".concat(13), string
+    assert string.html_safe?
+  end
+end
+
+class StringExcludeTest < ActiveSupport::TestCase
+  test 'inverse of #include' do
+    assert_equal false, 'foo'.exclude?('o')
+    assert_equal true, 'foo'.exclude?('p')
   end
 end

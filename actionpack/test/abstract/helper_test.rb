@@ -1,25 +1,25 @@
 require 'abstract_unit'
 
-ActionController::Base.helpers_dir = File.dirname(__FILE__) + '/../fixtures/helpers'
+ActionController::Base.helpers_path = [File.dirname(__FILE__) + '/../fixtures/helpers']
 
 module AbstractController
   module Testing
-  
+
     class ControllerWithHelpers < AbstractController::Base
-      include AbstractController::RenderingController
+      include AbstractController::Rendering
       include Helpers
 
       def with_module
         render :inline => "Module <%= included_method %>"
       end
     end
-   
+
     module HelperyTest
       def included_method
         "Included"
       end
     end
-   
+
     class AbstractHelpers < ControllerWithHelpers
       helper(HelperyTest) do
         def helpery_test
@@ -76,6 +76,6 @@ module AbstractController
       end
 
     end
-    
+
   end
 end

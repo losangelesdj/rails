@@ -140,7 +140,7 @@ module ActionView
         :stylesheets_dir => "#{assets_dir}/stylesheets",
       }
 
-      JAVASCRIPT_DEFAULT_SOURCES = ['prototype', 'effects', 'dragdrop', 'controls'].freeze unless const_defined?(:JAVASCRIPT_DEFAULT_SOURCES)
+      JAVASCRIPT_DEFAULT_SOURCES = ['prototype', 'effects', 'dragdrop', 'controls', 'rails'].freeze unless const_defined?(:JAVASCRIPT_DEFAULT_SOURCES)
 
       # Returns a link tag that browsers and news readers can use to auto-detect
       # an RSS or ATOM feed. The +type+ can either be <tt>:rss</tt> (default) or
@@ -293,7 +293,7 @@ module ActionView
         else
           sources = expand_javascript_sources(sources, recursive)
           ensure_javascript_sources!(sources) if cache
-          sources.collect { |source| javascript_src_tag(source, options) }.join("\n").html_safe!
+          sources.collect { |source| javascript_src_tag(source, options) }.join("\n").html_safe
         end
       end
 
@@ -444,7 +444,7 @@ module ActionView
         else
           sources = expand_stylesheet_sources(sources, recursive)
           ensure_stylesheet_sources!(sources) if cache
-          sources.collect { |source| stylesheet_tag(source, options) }.join("\n").html_safe!
+          sources.collect { |source| stylesheet_tag(source, options) }.join("\n").html_safe
         end
       end
 
@@ -588,7 +588,7 @@ module ActionView
 
         if sources.is_a?(Array)
           content_tag("video", options) do
-            sources.map { |source| tag("source", :src => source) }.join.html_safe!
+            sources.map { |source| tag("source", :src => source) }.join.html_safe
           end
         else
           options[:src] = path_to_video(sources)
@@ -634,8 +634,8 @@ module ActionView
         # Prefix with <tt>/dir/</tt> if lacking a leading +/+. Account for relative URL
         # roots. Rewrite the asset path for cache-busting asset ids. Include
         # asset host, if configured, with the correct request protocol.
-        def compute_public_path(source, dir, ext = nil, include_host = true)          
-          has_request = @controller.respond_to?(:request)
+        def compute_public_path(source, dir, ext = nil, include_host = true)
+          has_request = controller.respond_to?(:request)
 
           source_ext = File.extname(source)[1..-1]
           if ext && !is_uri?(source) && (source_ext.blank? || (ext != source_ext && File.exist?(File.join(config.assets_dir, dir, "#{source}.#{ext}"))))
@@ -658,7 +658,7 @@ module ActionView
             host = compute_asset_host(source)
 
             if has_request && !host.blank? && !is_uri?(host)
-              host = "#{@controller.request.protocol}#{host}"
+              host = "#{controller.request.protocol}#{host}"
             end
 
             "#{host}#{source}"
@@ -681,7 +681,7 @@ module ActionView
             if host.is_a?(Proc) || host.respond_to?(:call)
               case host.is_a?(Proc) ? host.arity : host.method(:call).arity
               when 2
-                request = @controller.respond_to?(:request) && @controller.request
+                request = controller.respond_to?(:request) && controller.request
                 host.call(source, request)
               else
                 host.call(source)

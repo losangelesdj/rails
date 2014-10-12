@@ -24,12 +24,12 @@ module ActionView
       #       end
       #       # will either display "Logged in!" or a login link
       #   %>
-      def concat(string, unused_binding = nil)
-        if unused_binding
-          ActiveSupport::Deprecation.warn("The binding argument of #concat is no longer needed.  Please remove it from your views and helpers.", caller)
-        end
-
+      def concat(string)
         output_buffer << string
+      end
+
+      def safe_concat(string)
+        output_buffer.safe_concat(string)
       end
 
       # Truncates a given +text+ after a given <tt>:length</tt> if +text+ is longer than <tt>:length</tt>
@@ -187,7 +187,7 @@ module ActionView
       #   pluralize(0, 'person')
       #   # => 0 people
       def pluralize(count, singular, plural = nil)
-        "#{count || 0} " + ((count == 1 || count == '1') ? singular : (plural || singular.pluralize))
+        "#{count || 0} " + ((count == 1 || count =~ /^1(\.0+)?$/) ? singular : (plural || singular.pluralize))
       end
 
       # Wraps the +text+ into lines no longer than +line_width+ width. This method
@@ -226,8 +226,7 @@ module ActionView
       # Returns the text with all the Textile[http://www.textism.com/tools/textile] codes turned into HTML tags.
       #
       # You can learn more about Textile's syntax at its website[http://www.textism.com/tools/textile].
-      # <i>This method is only available if RedCloth[http://whytheluckystiff.net/ruby/redcloth/]
-      # is available</i>.
+      # <i>This method is only available if RedCloth[http://redcloth.org/] is available</i>.
       #
       # ==== Examples
       #   textilize("*This is Textile!*  Rejoice!")
@@ -263,8 +262,7 @@ module ActionView
       # but without the bounding <p> tag that RedCloth adds.
       #
       # You can learn more about Textile's syntax at its website[http://www.textism.com/tools/textile].
-      # <i>This method is requires RedCloth[http://whytheluckystiff.net/ruby/redcloth/]
-      # to be available</i>.
+      # <i>This method is only available if RedCloth[http://redcloth.org/] is available</i>.
       #
       # ==== Examples
       #   textilize_without_paragraph("*This is Textile!*  Rejoice!")
@@ -329,12 +327,12 @@ module ActionView
       #   # => "<p class='description'>Look ma! A class!</p>"
       def simple_format(text, html_options={})
         start_tag = tag('p', html_options, true)
-        text = text.to_s.dup
+        text = h(text)
         text.gsub!(/\r\n?/, "\n")                    # \r\n and \r -> \n
         text.gsub!(/\n\n+/, "</p>\n\n#{start_tag}")  # 2+ newline  -> paragraph
         text.gsub!(/([^\n]\n)(?=[^\n])/, '\1<br />') # 1 newline   -> br
         text.insert 0, start_tag
-        text << "</p>"
+        text.safe_concat("</p>")
       end
 
       # Turns all URLs and e-mail addresses into clickable links. The <tt>:link</tt> option
@@ -567,7 +565,7 @@ module ActionView
               end
 
               link_text = block_given?? yield(href) : href
-              href = 'http://' + href unless href.index('http') == 0
+              href = 'http://' + href unless href =~ %r{^[a-z]+://}i
 
               content_tag(:a, h(link_text), link_attributes.merge('href' => href)) + punctuation.reverse.join('')
             end

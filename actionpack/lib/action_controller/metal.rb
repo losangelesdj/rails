@@ -1,4 +1,4 @@
-require 'active_support/core_ext/class/inheritable_attributes'
+require 'active_support/core_ext/class/attribute'
 
 module ActionController
   # ActionController::Metal provides a way to get a valid Rack application from a controller.
@@ -28,24 +28,9 @@ module ActionController
       self.class.controller_name
     end
 
-    # Returns the full controller name, underscored, without the ending Controller.
-    # For instance, MyApp::MyPostsController would return "my_app/my_posts" for
-    # controller_name.
-    #
-    # ==== Returns
-    # String
-    def self.controller_path
-      @controller_path ||= name && name.sub(/Controller$/, '').underscore
-    end
-
-    # Delegates to the class' #controller_path
-    def controller_path
-      self.class.controller_path
-    end
-
     # The details below can be overridden to support a specific
     # Request and Response object. The default ActionController::Base
-    # implementation includes RackConvenience, which makes a request
+    # implementation includes RackDelegation, which makes a request
     # and response object available. You might wish to control the
     # environment and response manually for performance reasons.
 
@@ -57,20 +42,33 @@ module ActionController
     end
 
     # Basic implementations for content_type=, location=, and headers are
-    # provided to reduce the dependency on the RackConvenience module
+    # provided to reduce the dependency on the RackDelegation module
     # in Renderer and Redirector.
 
     def content_type=(type)
       headers["Content-Type"] = type.to_s
     end
 
+    def content_type
+      headers["Content-Type"]
+    end
+
+    def location
+      headers["Location"]
+    end
+
     def location=(url)
       headers["Location"] = url
+    end
+
+    def status=(status)
+      @_status = Rack::Utils.status_code(status)
     end
 
     # :api: private
     def dispatch(name, env)
       @_env = env
+      @_env['action_controller.instance'] = self
       process(name)
       to_a
     end
@@ -81,7 +79,7 @@ module ActionController
     end
 
     class ActionEndpoint
-      @@endpoints = Hash.new {|h,k| h[k] = Hash.new {|h,k| h[k] = {} } }
+      @@endpoints = Hash.new {|h,k| h[k] = Hash.new {|sh,sk| sh[sk] = {} } }
 
       def self.for(controller, action, stack)
         @@endpoints[controller][action][stack] ||= begin
@@ -92,6 +90,7 @@ module ActionController
 
       def initialize(controller, action)
         @controller, @action = controller, action
+        @_formats = [Mime::HTML]
       end
 
       def call(env)
@@ -99,7 +98,12 @@ module ActionController
       end
     end
 
-    extlib_inheritable_accessor(:middleware_stack) { ActionDispatch::MiddlewareStack.new }
+    class_attribute :middleware_stack
+    self.middleware_stack = ActionDispatch::MiddlewareStack.new
+
+    def self.inherited(base)
+      self.middleware_stack = base.middleware_stack.dup
+    end
 
     def self.use(*args)
       middleware_stack.use(*args)

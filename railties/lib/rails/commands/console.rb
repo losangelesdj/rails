@@ -1,11 +1,9 @@
 require 'optparse'
 require 'irb'
-require "irb/completion"
+require 'irb/completion'
 
 module Rails
   class Console
-    ENVIRONMENTS = %w(production development test)
-
     def self.start(app)
       new(app).start
     end
@@ -21,18 +19,14 @@ module Rails
         opt.banner = "Usage: console [environment] [options]"
         opt.on('-s', '--sandbox', 'Rollback database modifications on exit.') { |v| options[:sandbox] = v }
         opt.on("--debugger", 'Enable ruby-debugging for the console.') { |v| options[:debugger] = v }
-        opt.on('--irb') { |v| abort '--irb option is no longer supported. Invoke `/your/choice/of/ruby script/console` instead' }
+        opt.on('--irb', "DEPRECATED: Invoke `/your/choice/of/ruby script/rails console` instead") { |v| abort '--irb option is no longer supported. Invoke `/your/choice/of/ruby script/rails console` instead' }
         opt.parse!(ARGV)
       end
 
-      if env = ARGV.first
-        ENV['RAILS_ENV'] = ENVIRONMENTS.find { |e| e.index(env) } || env
-      end
-
       @app.initialize!
-      require "rails/console_app"
-      require "rails/console_sandbox" if options[:sandbox]
-      require "rails/console_with_helpers"
+      require "rails/console/app"
+      require "rails/console/sandbox" if options[:sandbox]
+      require "rails/console/helpers"
 
       if options[:debugger]
         begin
@@ -53,4 +47,9 @@ module Rails
       IRB.start
     end
   end
+end
+
+# Has to set the RAILS_ENV before config/application is required
+if ARGV.first && !ARGV.first.index("-") && env = ARGV.pop # has to pop the env ARGV so IRB doesn't freak
+  ENV['RAILS_ENV'] = %w(production development test).find { |e| e.index(env) } || env
 end

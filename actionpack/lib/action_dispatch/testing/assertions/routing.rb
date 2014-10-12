@@ -12,29 +12,29 @@ module ActionDispatch
       # and a :method containing the required HTTP verb.
       #
       #   # assert that POSTing to /items will call the create action on ItemsController
-      #   assert_recognizes {:controller => 'items', :action => 'create'}, {:path => 'items', :method => :post}
+      #   assert_recognizes({:controller => 'items', :action => 'create'}, {:path => 'items', :method => :post})
       #
       # You can also pass in +extras+ with a hash containing URL parameters that would normally be in the query string.  This can be used
       # to assert that values in the query string string will end up in the params hash correctly.  To test query strings you must use the
       # extras argument, appending the query string on the path directly will not work.  For example:
       #
       #   # assert that a path of '/items/list/1?view=print' returns the correct options
-      #   assert_recognizes {:controller => 'items', :action => 'list', :id => '1', :view => 'print'}, 'items/list/1', { :view => "print" }
+      #   assert_recognizes({:controller => 'items', :action => 'list', :id => '1', :view => 'print'}, 'items/list/1', { :view => "print" })
       #
       # The +message+ parameter allows you to pass in an error message that is displayed upon failure.
       #
       # ==== Examples
       #   # Check the default route (i.e., the index action)
-      #   assert_recognizes {:controller => 'items', :action => 'index'}, 'items'
+      #   assert_recognizes({:controller => 'items', :action => 'index'}, 'items')
       #
       #   # Test a specific action
-      #   assert_recognizes {:controller => 'items', :action => 'list'}, 'items/list'
+      #   assert_recognizes({:controller => 'items', :action => 'list'}, 'items/list')
       #
       #   # Test an action with a parameter
-      #   assert_recognizes {:controller => 'items', :action => 'destroy', :id => '1'}, 'items/destroy/1'
+      #   assert_recognizes({:controller => 'items', :action => 'destroy', :id => '1'}, 'items/destroy/1')
       #
       #   # Test a custom route
-      #   assert_recognizes {:controller => 'items', :action => 'show', :id => '1'}, 'view/item1'
+      #   assert_recognizes({:controller => 'items', :action => 'show', :id => '1'}, 'view/item1')
       #
       #   # Check a Simply RESTful generated route
       #   assert_recognizes list_items_url, 'items/list'
@@ -46,7 +46,6 @@ module ActionDispatch
           request_method = nil
         end
 
-        ActionController::Routing::Routes.reload if ActionController::Routing::Routes.empty?
         request = recognized_request_for(path, request_method)
 
         expected_options = expected_options.clone
@@ -80,9 +79,8 @@ module ActionDispatch
       def assert_generates(expected_path, options, defaults={}, extras = {}, message=nil)
         expected_path = "/#{expected_path}" unless expected_path[0] == ?/
         # Load routes.rb if it hasn't been loaded.
-        ActionController::Routing::Routes.reload if ActionController::Routing::Routes.empty?
 
-        generated_path, extra_keys = ActionController::Routing::Routes.generate_extras(options, defaults)
+        generated_path, extra_keys = ActionDispatch::Routing::Routes.generate_extras(options, defaults)
         found_extras = options.reject {|k, v| ! extra_keys.include? k}
 
         msg = build_message(message, "found extras <?>, not <?>", found_extras, extras)
@@ -105,7 +103,7 @@ module ActionDispatch
       #  assert_routing '/home', :controller => 'home', :action => 'index'
       #
       #  # Test a route generated with a specific controller, action, and parameter (id)
-      #  assert_routing '/entries/show/23', :controller => 'entries', :action => 'show', id => 23
+      #  assert_routing '/entries/show/23', :controller => 'entries', :action => 'show', :id => 23
       #
       #  # Assert a basic route (controller + default action), with an error message if it fails
       #  assert_routing '/store', { :controller => 'store', :action => 'index' }, {}, {}, 'Route for store index not generated properly'
@@ -114,7 +112,7 @@ module ActionDispatch
       #  assert_routing 'controller/action/9', {:id => "9", :item => "square"}, {:controller => "controller", :action => "action"}, {}, {:item => "square"}
       #
       #  # Tests a route with a HTTP method
-      #  assert_routing { :method => 'put', :path => '/product/321' }, { :controller => "product", :action => "update", :id => "321" }
+      #  assert_routing({ :method => 'put', :path => '/product/321' }, { :controller => "product", :action => "update", :id => "321" })
       def assert_routing(path, options, defaults={}, extras={}, message=nil)
         assert_recognizes(options, path, extras, message)
 
@@ -126,6 +124,46 @@ module ActionDispatch
         assert_generates(path.is_a?(Hash) ? path[:path] : path, options, defaults, extras, message)
       end
 
+      # A helper to make it easier to test different route configurations.
+      # This method temporarily replaces ActionDispatch::Routing::Routes
+      # with a new RouteSet instance.
+      #
+      # The new instance is yielded to the passed block. Typically the block
+      # will create some routes using <tt>map.draw { map.connect ... }</tt>:
+      #
+      #   with_routing do |set|
+      #     set.draw do |map|
+      #       map.connect ':controller/:action/:id'
+      #         assert_equal(
+      #           ['/content/10/show', {}],
+      #           map.generate(:controller => 'content', :id => 10, :action => 'show')
+      #       end
+      #     end
+      #   end
+      #
+      def with_routing
+        real_routes = ActionDispatch::Routing::Routes
+        ActionDispatch::Routing.module_eval { remove_const :Routes }
+
+        temporary_routes = ActionDispatch::Routing::RouteSet.new
+        ActionDispatch::Routing.module_eval { const_set :Routes, temporary_routes }
+
+        yield temporary_routes
+      ensure
+        if ActionDispatch::Routing.const_defined? :Routes
+          ActionDispatch::Routing.module_eval { remove_const :Routes }
+        end
+        ActionDispatch::Routing.const_set(:Routes, real_routes) if real_routes
+      end
+
+      def method_missing(selector, *args, &block)
+        if @controller && ActionDispatch::Routing::Routes.named_routes.helpers.include?(selector)
+          @controller.send(selector, *args, &block)
+        else
+          super
+        end
+      end
+
       private
         # Recognizes the route for a given path.
         def recognized_request_for(path, request_method = nil)
@@ -134,9 +172,11 @@ module ActionDispatch
           # Assume given controller
           request = ActionController::TestRequest.new
           request.env["REQUEST_METHOD"] = request_method.to_s.upcase if request_method
-          request.path   = path
+          request.path = path
 
-          ActionController::Routing::Routes.recognize(request)
+          params = ActionDispatch::Routing::Routes.recognize_path(path, { :method => request.method })
+          request.path_parameters = params.with_indifferent_access
+
           request
         end
     end
